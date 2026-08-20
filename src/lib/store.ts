@@ -47,6 +47,18 @@ export function useReportStore(onAuthExpired: () => void) {
   const [booting, setBooting] = useState(() => !!readMirror())
   const firstChangeAfterReset = useRef(false)
   const saveSeq = useRef(0)
+  // Si la sesión arranca sin mirror local, `report` nace de initialTemplate() —
+  // un informe en blanco que nadie tocó. Sin esta guarda, el solo hecho de
+  // abrir la app (o que la abra un bot, o correr un test) crea un documento
+  // permanente en el Worker. Se compara contra una foto del `report` del
+  // primer render (por referencia, no un flag consumido una vez): React
+  // StrictMode monta cada efecto dos veces en desarrollo (monta → limpia →
+  // monta) y un flag booleano se "gasta" en la pasada fantasma, dejando la
+  // real sin protección — probado en propuesta_tecnica_react, ver su
+  // CLAUDE.md. Sólo aplica si no había mirror; una sesión que vuelve con
+  // cambios sin sincronizar sigue guardando como siempre.
+  const hadMirrorOnBoot = useRef(!!readMirror())
+  const pristineReport = useRef(report)
   // Ref en vez de dependencia del efecto: sólo nos interesa la versión más reciente del
   // callback cuando de verdad se necesita (401), no que el timer de autoguardado se
   // reinicie cada vez que App.tsx vuelve a renderizar y crea la función de nuevo. Se
@@ -80,6 +92,8 @@ export function useReportStore(onAuthExpired: () => void) {
   }, [])
 
   useEffect(() => {
+    const isUntouched = !hadMirrorOnBoot.current && report === pristineReport.current
+    if (isUntouched) return
     const seq = ++saveSeq.current
     const t = setTimeout(async () => {
       writeMirror(report)
