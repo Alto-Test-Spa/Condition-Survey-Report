@@ -615,23 +615,26 @@ desde el auto-generado al crear la cuenta).
   correcta) haga `npm run deploy` normal — el camino manual de esta vez fue
   para sortear el problema puntual del navegador equivocado, no es el
   proceso a repetir por costumbre.
-- Conectar `venta/propuesta_tecnica` y `venta/propuesta_economica` al mismo
-  Worker (`kind = "tecnica"` / `"economica"`) — el Worker ya está listo para
-  recibirlas (probado con un PUT/GET/DELETE de prueba bajo `kind=tecnica`),
-  falta construir el lado vanilla-JS: portón de acceso, sincronización con
-  la nube como fuente de verdad (mismo modelo que esta app, no sólo
-  respaldo), y un Historial equivalente a `HistoryMenu.tsx` pero sin React.
-  Es trabajo grande — ver sus propios `CLAUDE.md` una vez que se haga.
+
+## Pendientes
+
+- **`propuesta_economica` ya está conectada — no por este camino, por uno
+  distinto.** No se le agregó el Worker al vanilla-JS existente: se
+  **reescribió completa en Vite+React** (`venta/propuesta_economica_react/`,
+  mismo patrón que esta app) y esa versión **ya está en producción**
+  (`quotegenerator.altotest.cl`, 2026-08-20) — ver su propio `CLAUDE.md`,
+  sección "Despliegue". Sigue pendiente sólo **`venta/propuesta_tecnica`**:
+  mismo tratamiento (reescritura React, no parche vanilla-JS) — el Worker ya
+  está listo para recibirla bajo `kind="tecnica"` (probado con un
+  PUT/GET/DELETE de prueba), falta construir la app. Es trabajo grande —
+  usar `propuesta_economica_react/` como plantilla de arranque (mismo
+  store/api/AccessGate/HistoryMenu, sólo cambia el modelo de datos y el
+  motor de capítulos/Gantt que ya existe acá).
 - Replicar el nivel de detalle del capítulo "Puntos de anclaje unipersonales"
   (el capítulo de ejemplo, con ficha/observaciones/recomendaciones ya
   redactadas) en los otros 3 capítulos de inspección — o decidir con el
   usuario si conviene dejarlos como plantilla vacía a propósito, lista para
   llenar en cada levantamiento real.
-- **Repo git**: esta carpeta no es un repositorio git todavía (a diferencia
-  de `propuesta_tecnica`, `propuesta_economica`, `site`). Decidir si se
-  inicializa y se sube a `Alto-Test-Spa` como los demás (el Worker, al ser
-  un proyecto npm aparte, probablemente merece su propio repo — ver cómo se
-  organizó `site` + `site/worker`).
 - Editar el folio de un informe ya guardado deja huérfano el `code` viejo en
   KV (ver "Folio") — decidir si conviene bloquear la edición del folio una
   vez guardado, o migrar el registro viejo al nuevo código en el Worker.
@@ -641,3 +644,11 @@ desde el auto-generado al crear la cuenta).
   excluir subtítulos sueltos dentro de un capítulo).
 - Revisar con Camilo/Matías la redacción final de portada y cierre
   ("Próximos pasos") antes de usarlo en un levantamiento real con cliente.
+
+## Repo
+
+Este proyecto sí es un repositorio git (a diferencia de cuando se escribió
+la nota anterior) — `Alto-Test-Spa/Condition-Survey-Report`, pusheado el
+2026-08-20 como primer commit (`main`). El Worker vive adentro (`worker/`,
+mismo repo) aunque ya no es específico de este proyecto — ver "Arquitectura
+de datos" arriba sobre por qué no se separó en su propio repo por ahora.
