@@ -1,0 +1,16 @@
+{
+  "name": "altotest-informe-levantamiento-worker",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secret:access-key": "wrangler secret put ACCESS_KEY"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260815.1",
+    "typescript": "~5.9.0",
+    "wrangler": "^4.0.0"
+  }
+}

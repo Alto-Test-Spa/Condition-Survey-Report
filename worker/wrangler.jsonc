@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "altotest-documentos",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "account_id": "127be0022568b3839ed7da1973fc8104",
+  "kv_namespaces": [
+    {
+      "binding": "REPORTS",
+      "id": "f23fac81596e445688d0abf53a09be67",
+      "preview_id": "312776f575894e6a99a35914113030ab"
+    }
+  ]
+}
