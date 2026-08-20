@@ -3,11 +3,13 @@
 Contexto para retomar este proyecto sin releer todo el chat. Aquí están las
 **decisiones y las trampas**, no un tutorial de React. Este proyecto vive en
 `informes/` (ver `../../CONTEXTO.md` para el mapa completo de carpetas de
-Alto Test). Ver también `../../venta/propuesta_tecnica/CLAUDE.md` y
-`../../venta/propuesta_economica/CLAUDE.md` (mismo autor, mismas convenciones
-de fondo, pero **stack distinto** — no asumir que algo de allá aplica aquí
-sin revisar; a partir de esta sesión los tres comparten el mismo Worker, ver
-"Arquitectura de datos" más abajo),
+Alto Test). Ver también `../../venta/propuesta_tecnica_react/CLAUDE.md` y
+`../../venta/propuesta_economica_react/CLAUDE.md` (mismo autor, mismas
+convenciones de fondo — los tres son Vite+React+TS+Tailwind desde el
+2026-08-20, cuando se reescribieron los dos vanilla que le quedaban a
+`venta/`; antes de esa fecha estas notas comparaban contra un stack distinto,
+ver "Decisiones del usuario" y "Pendientes" más abajo para el historial). Los
+tres comparten el mismo Worker, ver "Arquitectura de datos" más abajo.
 `/home/meraki/merakilabs/propuestas/generador/CLAUDE.md` (de ahí sale el
 patrón de Historial y el stack Vite+React+Tailwind que usa esta carpeta) y
 `../../site/worker/` (de ahí sale el patrón de Worker que se usa acá: CORS,
@@ -291,6 +293,20 @@ Worker, y actualizar el estado visible (`idle → saving → saved`, o
 respuesta de un guardado viejo si uno más nuevo ya llegó antes — evita que
 una respuesta lenta pise el estado de una más reciente.
 
+**No guarda hasta la primera edición real** (fix del 2026-08-20, aplicado
+también en los dos hermanos de `venta/` tras notarlo primero en
+`propuesta_tecnica_react`): sin esto, `report` nace de `initialTemplate()` en
+el primer render y el efecto de guardado lo persiste a los 400ms aunque
+nadie haya tocado nada — el solo hecho de abrir la app crea un informe
+permanente en el Worker. Se compara `report` contra una foto de sí mismo
+tomada en el primer render (`pristineReport`, por referencia, no
+`JSON.stringify`) en vez de un flag booleano de una sola consumición: React
+StrictMode monta cada efecto dos veces en desarrollo (monta → limpia →
+monta), y un flag se "gasta" en la pasada fantasma, dejando la real sin
+protección — se confirmó el fallo antes de cambiar de enfoque. Sólo aplica
+si la sesión arranca sin mirror local; una que vuelve con cambios sin
+sincronizar sigue guardando como siempre.
+
 ## Numeración (`lib/chapters.ts`)
 
 `numberDocument()` es el **único** lugar que calcula números de sección —
@@ -538,8 +554,10 @@ cazados").
 
 ## Decisiones del usuario (Matías) — no revertir sin pedir
 
-- **Stack Vite+React+TS+Tailwind**, no vanilla como `propuesta_tecnica`/
-  `propuesta_economica` — siguiendo el patrón de `generador/`.
+- **Stack Vite+React+TS+Tailwind**, siguiendo el patrón de `generador/` — en
+  su momento (esta sesión) era distinto al de `propuesta_tecnica`/
+  `propuesta_economica`, entonces vanilla; los dos se reescribieron después
+  con el mismo criterio (ver "Pendientes" y `CONTEXTO.md` de la raíz).
 - **Código en inglés, comentarios en español** — corregido a mitad de sesión
   después de empezar en español; no volver a mezclar.
 - **Fotos intercaladas en el cuerpo de cada capítulo**, no en un anexo al
@@ -618,18 +636,18 @@ desde el auto-generado al crear la cuenta).
 
 ## Pendientes
 
-- **`propuesta_economica` ya está conectada — no por este camino, por uno
-  distinto.** No se le agregó el Worker al vanilla-JS existente: se
-  **reescribió completa en Vite+React** (`venta/propuesta_economica_react/`,
-  mismo patrón que esta app) y esa versión **ya está en producción**
-  (`quotegenerator.altotest.cl`, 2026-08-20) — ver su propio `CLAUDE.md`,
-  sección "Despliegue". Sigue pendiente sólo **`venta/propuesta_tecnica`**:
-  mismo tratamiento (reescritura React, no parche vanilla-JS) — el Worker ya
-  está listo para recibirla bajo `kind="tecnica"` (probado con un
-  PUT/GET/DELETE de prueba), falta construir la app. Es trabajo grande —
-  usar `propuesta_economica_react/` como plantilla de arranque (mismo
-  store/api/AccessGate/HistoryMenu, sólo cambia el modelo de datos y el
-  motor de capítulos/Gantt que ya existe acá).
+- ~~`propuesta_economica`/`propuesta_tecnica` conectadas al Worker~~ — hecho.
+  A ninguna de las dos se le agregó el Worker al vanilla-JS existente: se
+  **reescribieron completas en Vite+React** (`venta/propuesta_economica_react/`
+  y `venta/propuesta_tecnica_react/`, mismo patrón que esta app) y las dos
+  **ya están en producción** (`quotegenerator.altotest.cl` y el dominio de
+  `propuesta_tecnica`, ambas 2026-08-20) — ver el `CLAUDE.md` de cada una,
+  sección "Despliegue". Las carpetas vanilla se borraron del disco local una
+  vez confirmado cada deploy (historial completo preservado en GitHub, ver
+  `CONTEXTO.md` de la raíz). `propuesta_tecnica_react` sí tuvo que construir
+  de cero un motor de capítulos/subtítulos con más granularidad que el de
+  acá (ver el punto de exclusión más abajo) y una carta Gantt — ninguno de
+  los dos existía en React todavía cuando se hizo.
 - Replicar el nivel de detalle del capítulo "Puntos de anclaje unipersonales"
   (el capítulo de ejemplo, con ficha/observaciones/recomendaciones ya
   redactadas) en los otros 3 capítulos de inspección — o decidir con el
