@@ -332,6 +332,40 @@ sino `n + 1` / `n + 2` sobre el último capítulo incluido. El índice
 lista de capítulos numerados — si se agrega una sección fija nueva, hay que
 pasarle su número desde `ReportEditor.tsx`, no inventarlo en el componente.
 
+## Layout del capítulo y de la portada — por qué no se parecen a VROPE
+
+El primer diseño (ficha → observaciones → foto → recomendaciones, todo en un
+bloque apilado único) resultó **visualmente casi idéntico** al informe de
+referencia de la competencia (`ejemplo_vrope.pdf`) pese a tener paleta y
+contenido distintos — riesgo real señalado por Matías: Alto Test trabaja con
+los mismos clientes muchas veces, y dos informes con el mismo esqueleto
+visual es un problema de imagen, no un detalle estético. Se rediseñó en dos
+frentes:
+
+- **Cada `Chapter.tsx` es ahora un layout de 2 columnas** (`.chapter-body`,
+  `grid-template-columns: 1.9in 1fr`): `.chapter-aside` (ficha técnica +
+  badge de severidad, fija, no crece con el contenido — `align-self: start`)
+  a la izquierda, y `.chapter-main` (observaciones → fotos → recomendaciones)
+  a la derecha. Una franja de color por severidad (`ACCENT_CLASS`, clases
+  `accent-*` — **no** `severity-*` a secas, ver "Bugs ya cazados" sobre por
+  qué esa colisión de nombres pintó una vez todo el bloque naranjo) corre por
+  el borde izquierdo de la ficha.
+- **`Cover.tsx` dejó de ser una carta formal** ("Señores.../Presente,",
+  patrón que sí usa el informe de referencia) — el título abre la página
+  directo, cliente/activo/contacto/fecha/folio se leen como una fichita de
+  hechos (`dl.cover-facts`, mismo lenguaje visual etiqueta-arriba/valor-abajo
+  que `.chapter-aside`), y el pie de portada es una **franja de estado**:
+  barra segmentada por severidad de los capítulos incluidos + leyenda
+  ("N sistemas relevados en terreno · N críticos · ...") — información real
+  del levantamiento, no decoración, y algo que ningún informe de la
+  competencia muestra en portada. La firma técnica que antes vivía ahí se
+  movió al cierre del documento (`Conclusions.tsx`, `.closing-signature`).
+
+**Texto justificado** (`text-align: justify; hyphens: auto`) vive en
+`.rich-text` (no en `.lead`, que es sólo un modificador de tamaño/color) —
+así alcanza a observaciones/recomendaciones de cada capítulo, no sólo a
+portada/metodología/conclusiones.
+
 ## Ficha técnica (`SpecTable.tsx`)
 
 Tabla clave-valor editable — **un solo componente** para los 4 capítulos,
@@ -339,7 +373,9 @@ sólo cambian los nombres de campo (`spec[].field`) que trae cada uno en
 `lib/template.ts`. Sirve tanto para una ficha de datos (anclajes: Tipo,
 Cantidad, Antecedentes...) como para un checklist comparativo (accesibilidad:
 Accesos, Escaleras, Pasarelas y barandas...) — no hace falta un segundo
-componente para eso, es la misma forma con otros campos.
+componente para eso, es la misma forma con otros campos. Dentro de
+`.chapter-aside` (ver arriba) la tabla pasa de 2 columnas a filas apiladas
+(campo chico arriba, valor debajo) vía CSS — el componente no cambia.
 
 ## Fotos (`PhotoGallery.tsx` + `lib/image.ts`)
 
@@ -379,18 +415,17 @@ Ambos comparten la clase `.editable`, que entre otras cosas lleva
 `overflow-wrap: anywhere` — ver "Bugs ya cazados", es la clase que evita que
 un texto largo sin espacios reviente la paginación.
 
-## Paginación de impresión (`index.css`)
+## Paginación de impresión (`index.css`, `components/Chapter.tsx`)
 
 **Cada vista del documento es su propia hoja Carta**, en pantalla y en
 impresión — portada, índice, "Alcance y metodología", cada capítulo, Síntesis
 y Conclusiones son un `<section class="page">` distinto. A diferencia de
 `propuesta_tecnica` (que fuerza que un capítulo entero quepa en una sola hoja,
 recortando contenido si no cabe), acá **un capítulo puede crecer más de una
-hoja** si trae varias fotos: `.page` tiene `min-height: 11in` pero no
-`overflow: hidden`, así que si el contenido no cabe, el navegador reparte el
-sobrante en la hoja siguiente de forma normal. Es la decisión correcta dado
-que la cantidad de fotos por capítulo es variable — forzar una sola hoja como
-en `propuesta_tecnica` recortaría fotos en silencio.
+hoja** si trae varias fotos: el navegador reparte el sobrante en la hoja
+siguiente de forma normal. Es la decisión correcta dado que la cantidad de
+fotos por capítulo es variable — forzar una sola hoja como en
+`propuesta_tecnica` recortaría fotos en silencio.
 
 ```css
 @page { size: Letter; margin: 0; }   /* el margen lo da el padding de .page, no @page */
@@ -400,6 +435,54 @@ en `propuesta_tecnica` recortaría fotos en silencio.
 
 `.page` lleva `break-after: page` en impresión (y `.page:last-child` no, para
 no dejar una hoja en blanco al final).
+
+**`.page.chapter` es la única excepción — no lleva `min-height` fijo en CSS.**
+Un capítulo corto (sin fotos, recién creado) no debería forzar `11in` porque
+después necesita poder crecer más allá de eso sin que ningún truco de CSS
+tenga que "adivinar" cuándo dejar de aplicar el mínimo. En vez de eso,
+`Chapter.tsx` mide el alto real del contenido con `useLayoutEffect` cada vez
+que el capítulo cambia (texto, fotos, severidad, filas de la ficha — depende
+del objeto `chapter` completo, no de un campo puntual) y aplica el resultado
+como `style={{ minHeight }}` en línea sobre el propio `<section>`:
+
+- Si el contenido entra en una hoja (con `SAFETY_MARGIN_PX = 48` de colchón),
+  se fuerza **siempre** una hoja completa (`PAGE_HEIGHT_PX = 11 * 96`) —
+  nunca el alto "pelado" del contenido, aunque técnicamente quepa: min-height
+  es un piso, no un techo, así que dejarlo justo al límite es dejar cero
+  colchón exactamente donde más se necesita (ver "Bugs ya cazados").
+- Si el contenido ya excede una hoja de sobra, se usa su alto real medido
+  (`offsetHeight`) — ahí no hay colchón que alcance, tiene que repartirse en
+  más de una hoja física igual.
+
+El pie de cada capítulo (`PageFooter`, ver más abajo) usa
+`position: absolute; bottom: 0` contra ese `min-height` ya aplicado — **no**
+`margin-top: auto` en un flex-column, que fue el primer intento y se sacó por
+un bug real de fragmentación de Chromium (ver "Bugs ya cazados").
+
+## Pie de página (`components/PageFooter.tsx`)
+
+Franja `--color-steel` de 46px pegada al fondo de cada hoja de papel (no en
+la portada, que ya tiene peso visual propio con la ficha y la franja de
+estado) — a pedido de Camilo, que sintió las hojas "muy blancas". Contenido:
+"ALTO TEST" a la izquierda + un bloque en diagonal (`clip-path`) a la derecha
+en `--color-ink` con el folio y la numeración corrida del documento
+(`sectionNumber / totalSections`, la misma que ya calcula `numberDocument()`
+para el índice — no un contador de páginas de impresión real, porque un
+capítulo puede repartirse en 2+ hojas físicas y eso descuadraría el conteo).
+
+Pasó por **cuatro rondas de diseño** antes de este resultado — antes de
+tocarlo de nuevo, revisar qué ya se descartó y por qué:
+1. Franja de color lisa con texto → "muy minimal" (Camilo).
+2. Franja con degradé/borde decorativo → tampoco convenció.
+3. Trazo de la catenaria (el isotipo) estirado a todo el ancho → "no
+   convenció para nada" (Matías) — quería formas reales, no una línea.
+4. **Actual**: bloque en diagonal + texto (sin ícono), con numeración de
+   página — es lo que se aprobó.
+
+En `.page.chapter`, `PageFooter` recibe su `ref` **directamente en el
+`<footer>`** (React 19, sin `forwardRef`) — nunca envolverlo en un `<div>`
+intermedio sólo para poder medirlo, ver "Bugs ya cazados" (el bug del ref
+envuelto) para el porqué exacto.
 
 ## Folio (`lib/code.ts`)
 
@@ -506,6 +589,9 @@ lleva el color de alerta completo.
 | `clientName` definido en `types.ts`/`template.ts` pero nunca aparecía en ningún lado editable | Quedó del diseño inicial de la portada, sin conectar a un campo real. Fix: se agregó como línea editable en `Cover.tsx`, separada de `clientAsset` (empresa/cliente vs. activo/edificio), y ahora también alimenta el nombre que se muestra en el Historial. |
 | `oxlint` marcaba `react(refs)`: acceso a un ref durante el render (`onAuthExpiredRef.current = onAuthExpired` directo en el cuerpo del hook) | Aunque es un patrón común ("ref con la última versión de un callback"), React no garantiza que escribir un ref durante el render sea seguro. Fix: mover la asignación a un `useEffect` sin dependencias (corre después de cada render, sigue sin forzar que el efecto de guardado dependa del callback). |
 | `oxlint` marcaba `react(set-state-in-effect)` en dos lugares (`App.tsx` y `store.ts`) por llamar `setChecking(false)`/`setBooting(false)` de forma síncrona dentro de un efecto cuando no había nada que verificar | El patrón "arranca en `true`, el efecto lo apaga si no aplica" fuerza un render extra innecesario. Fix: inicializar el estado de forma perezosa según la condición (`useState(() => !!getStoredAccessKey())`), para que el caso "no hay nada que hacer" no pase por el efecto en absoluto. |
+| Pie de página de un capítulo corto/vacío quedaba pegado justo debajo del contenido, con el resto de la hoja física en blanco por debajo sin usar (reportado por Camilo y Matías con capturas reales, varias veces) | Tres causas distintas, encontradas una a la vez — no una sola: (1) primer intento usaba un spacer invisible + `getBoundingClientRect` + un acumulador de estado (`setFillerPx(prev => prev + deficit)`) que podía sobre-corregirse con contenido asíncrono, dejando capítulos cortos medidos más altos que una hoja entera — confirmado con una traza real registrando cada paso de una edición en vivo. (2) el rediseño a flex-column + `margin-top:auto` fallaba porque el `ref` de `PageFooter` estaba en un `<div>` envolvente, no en el propio `<footer>` — `margin:auto` en el eje del bloque sólo hace algo en un ítem flex **directo**, en cualquier descendiente más profundo simplemente vale 0. (3) el mismo flex-column + `margin-top:auto`, ya con el ref corregido, tenía un bug real y distinto de **Chromium**: al fragmentar la caja en 2+ hojas físicas de impresión, el algoritmo de fragmentación de flexbox con auto-margins es inconsistente — confirmado imprimiendo un solo capítulo aislado (con contenido que de sobra entraba en una hoja, con espacio libre visible) y el pie igual saltaba entero a una segunda hoja casi en blanco. Fix final: nada de flexbox para esto — `Chapter.tsx` mide el contenido con `useLayoutEffect` y aplica un `min-height` en línea (ver "Paginación de impresión"), y el pie vuelve a `position:absolute;bottom:0` — el mismo mecanismo, ya probado, que usan todas las demás páginas. Un elemento posicionado de forma absoluta queda fuera del flujo de fragmentación de CSS Paged Media, así que no puede heredar el bug (3). |
+| El fix anterior (con `min-height` calculado en JS) volvió a fallar en un caso específico: un capítulo cuyo contenido real medía apenas más que el límite de una hoja terminaba con el pie solo en una segunda hoja casi vacía | La primera versión de la lógica usaba el alto "pelado" del contenido (`naturalHeight`) apenas éste no entraba con el margen de seguridad de sobra — exactamente el caso borde que más necesitaba colchón contra la diferencia entre cómo mide React en pantalla y cómo termina renderizando Chrome al imprimir de verdad terminaba con cero colchón. Fix: invertir la condición — forzar SIEMPRE una hoja completa salvo que el contenido exceda claramente el límite (`naturalHeight > PAGE_HEIGHT_PX + SAFETY_MARGIN_PX`), nunca al revés. |
+| Al probar el layout de 2 columnas del capítulo (`.chapter-body`), el bloque completo (ficha + narrativa) se pintó naranjo sólido | Las clases `severity-critical`/`severity-needs-action`/etc ya existían **sin scopear a su componente** — las usan `SeverityBadge.tsx` y el punto de `SummaryTable.tsx` para pintar su propio fondo. La franja de color nueva del layout de 2 columnas reusó esos mismos nombres de clase en `.chapter-aside`/`.chapter-body`, y como no están scopeadas, cualquier otro elemento con esa clase hereda el mismo fondo. Fix: prefijo `accent-*` dedicado para la franja del layout, nunca compartir nombre con clases de otro componente que no estén scopeadas. |
 
 ## Verificación
 
@@ -636,6 +722,17 @@ desde el auto-generado al crear la cuenta).
 
 ## Pendientes
 
+- **Frontend de esta app aún no está en Vercel** — a diferencia de
+  `propuesta_economica_react`/`propuesta_tecnica_react` (ver más abajo), que
+  ya reemplazaron un proyecto Vercel existente. `informe_levantamiento` sólo
+  se ha probado local (`npm run dev`, `localhost:5210`) contra el Worker real
+  o contra `wrangler dev`. El repo GitHub (`Alto-Test-Spa/Condition-Survey-Report`)
+  ya tiene todo pusheado a `main` — falta importar el proyecto en el
+  dashboard de Vercel (Add New Project → detecta Vite solo, es la primera
+  vez, no hay preset viejo que cambiar) y agregar
+  `VITE_REPORTS_ENDPOINT=https://altotest-documentos.altotest.workers.dev`
+  como variable de entorno antes del primer deploy. Confirmar con Matías si
+  ya lo hizo — quedó en "lo hago yo, tranqui" a mitad de esta sesión.
 - ~~`propuesta_economica`/`propuesta_tecnica` conectadas al Worker~~ — hecho.
   A ninguna de las dos se le agregó el Worker al vanilla-JS existente: se
   **reescribieron completas en Vite+React** (`venta/propuesta_economica_react/`
