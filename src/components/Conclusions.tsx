@@ -9,13 +9,14 @@ import { PageFooter } from './PageFooter'
 interface Props {
   report: ReportState
   number: number
+  totalSections: number
   onChange: (patch: Partial<ReportState>) => void
 }
 
 // Cierre del informe: la síntesis técnica y, separada de ella, la invitación a
 // continuar el ciclo (Diseño → Instalación → Certificación). Tono de continuidad, no de
 // venta — ver lib/template.ts para la redacción por defecto.
-export function Conclusions({ report, number, onChange }: Props) {
+export function Conclusions({ report, number, totalSections, onChange }: Props) {
   return (
     <section id="conclusions" className="page">
       <div className="section-head">
@@ -75,7 +76,7 @@ export function Conclusions({ report, number, onChange }: Props) {
           placeholder="correo@altotest.cl"
         />
       </div>
-      <PageFooter code={report.code} clientAsset={report.clientAsset} />
+      <PageFooter code={report.code} sectionNumber={number} totalSections={totalSections} />
     </section>
   )
 }

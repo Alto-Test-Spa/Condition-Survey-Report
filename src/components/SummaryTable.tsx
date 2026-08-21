@@ -9,6 +9,7 @@ interface Props {
   report: ReportState
   chapters: NumberedChapter[]
   number: number
+  totalSections: number
   onChange: (patch: Partial<ReportState>) => void
 }
 
@@ -20,7 +21,7 @@ const SEVERITY_CLASS: Record<string, string> = {
   compliant: 'severity-dot severity-compliant',
 }
 
-export function SummaryTable({ report, chapters, number, onChange }: Props) {
+export function SummaryTable({ report, chapters, number, totalSections, onChange }: Props) {
   const included = chapters.filter((c) => c.included)
 
   return (
@@ -68,7 +69,7 @@ export function SummaryTable({ report, chapters, number, onChange }: Props) {
           ))}
         </tbody>
       </table>
-      <PageFooter code={report.code} clientAsset={report.clientAsset} />
+      <PageFooter code={report.code} sectionNumber={number} totalSections={totalSections} />
     </section>
   )
 }

@@ -76,7 +76,7 @@ export default function ReportEditor({ onAuthExpired }: Props) {
           summaryNumber={summaryNumber}
           conclusionsNumber={conclusionsNumber}
           code={report.code}
-          clientAsset={report.clientAsset}
+          totalSections={conclusionsNumber}
         />
 
         <section id="methodology" className="page">
@@ -101,7 +101,7 @@ export default function ReportEditor({ onAuthExpired }: Props) {
             onChange={(methodology) => patchReport({ methodology })}
             placeholder="Describa el alcance y la metodología del levantamiento."
           />
-          <PageFooter code={report.code} clientAsset={report.clientAsset} />
+          <PageFooter code={report.code} sectionNumber={methodologyNumber} totalSections={conclusionsNumber} />
         </section>
 
         {numberedChapters.map((chapter) => (
@@ -111,7 +111,8 @@ export default function ReportEditor({ onAuthExpired }: Props) {
             number={chapter.number}
             onChange={(next) => patchChapter(chapter.id, next)}
             code={report.code}
-            clientAsset={report.clientAsset}
+            sectionNumber={chapter.number ?? 0}
+            totalSections={conclusionsNumber}
           />
         ))}
 
@@ -119,9 +120,15 @@ export default function ReportEditor({ onAuthExpired }: Props) {
           report={report}
           chapters={numberedChapters}
           number={summaryNumber}
+          totalSections={conclusionsNumber}
           onChange={patchReport}
         />
-        <Conclusions report={report} number={conclusionsNumber} onChange={patchReport} />
+        <Conclusions
+          report={report}
+          number={conclusionsNumber}
+          totalSections={conclusionsNumber}
+          onChange={patchReport}
+        />
       </main>
     </div>
   )

@@ -403,38 +403,94 @@
       box-shadow: 0 0 0 1px rgb(16 21 30 / 6%), 0 20px 44px -24px rgb(16 21 30 / 40%);
     }
   }
-  /* Pie de página: position:absolute (no en el flujo normal) para no interferir con la
-     paginación de un capítulo que se reparte en varias hojas (ver Chapter.tsx). El
-     contenedor de referencia es .page, que ya es position:relative — bottom se mide
-     desde el borde de su padding-box, así que 0.35in cae dentro del padding existente
-     (0.85in) sin invadir el contenido ni pisar el borde físico del papel. No va en la
-     portada (.page.dark ya tiene peso visual propio con la ficha y la franja de estado).
-  */
+  /* .page.chapter: min-height NO se fija en CSS — se calcula en JS (Chapter.tsx,
+     useLayoutEffect: una hoja completa si el contenido es corto, o el alto real del
+     contenido si ya es más largo que una hoja) y se aplica como estilo en línea sobre el
+     propio <section>, siempre.
+     Se probó primero un flex-column con el pie en margin-top:auto (mismo truco CSS que
+     "empuja al fondo" en cualquier tutorial) — se sacó por un bug real de Chromium: al
+     imprimir, cuando esta caja necesita fragmentarse en 2 hojas físicas, el algoritmo de
+     fragmentación de flexbox + auto-margins es inconsistente — se confirmó con una
+     prueba aislada (imprimir SÓLO un capítulo, con contenido que de sobra entraba en una
+     hoja, con espacio libre visible al final) y el pie igual saltaba entero a una segunda
+     hoja casi en blanco, dejando ese espacio libre sin usar en la primera. Fragmentación
+     de flex/auto-margins en
+     impresión es un punto débil conocido de los motores de layout, no algo que se pueda
+     arreglar ajustando números.
+     La solución robusta es la MISMA que ya usan todas las demás páginas (índice,
+     metodología, síntesis, conclusiones): position:absolute;bottom:0 en el pie, anclado
+     contra el min-height que ya calculamos en JS — un elemento posicionado de forma
+     absoluta queda FUERA del flujo de fragmentación de CSS Paged Media, así que no puede
+     heredar ese bug. */
+  /* Pie de página: franja sólida (no una línea ni un degradé) — mismo espíritu que
+     .doc-footer de propuesta_economica_react y .foot de propuesta_tecnica_react, pero en
+     --color-steel (azul de marca) en vez de --color-ink: la versión en tinta casi negra
+     "resaltaba demasiado" según Camilo.
+     Pegada al borde físico real de la hoja (position:absolute, bottom:0, que en CSS se
+     resuelve contra el padding-box del ancestro posicionado — con box-sizing:border-box y
+     sin borde, ese padding-box coincide con el borde visual real de `.page`, por eso el
+     pie sangra hasta el borde físico pese al padding de 0.85in/0.9in). Funciona igual en
+     toc/metodología/síntesis/conclusiones (min-height:11in fijo en CSS) que en capítulos
+     (min-height calculado en JS, ver arriba) — misma regla, sin excepción. */
   .page-footer {
     position: absolute;
-    left: 0.9in;
-    right: 0.9in;
-    bottom: 0.35in;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
-    justify-content: space-between;
+    align-items: center;
+    height: 46px;
+    overflow: hidden;
+    background: var(--color-steel);
+  }
+  .page-footer-mark {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    margin-left: 0.9in;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-paper);
+  }
+  /* Bloque en diagonal (no una franja plana ni una línea) — pedido explícito: "formas,
+     líneas, tamaños, mezcla de paletas" en vez de sólo color de fondo. --color-ink (no un
+     tercer azul nuevo) para que siga siendo la paleta de la marca, con el folio adentro
+     en --color-paper para contraste. clip-path recorta el borde izquierdo en ángulo. */
+  .page-footer-wedge {
+    position: relative;
+    z-index: 1;
+    margin-left: auto;
+    height: 100%;
+    min-width: 46%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 0.9in 0 34px;
+    background: var(--color-ink);
+    clip-path: polygon(24px 0, 100% 0, 100% 100%, 0 100%);
+  }
+  .page-footer-code {
+    display: flex;
     align-items: baseline;
-    padding-top: 8px;
-    /* Camilo pidió una variante azul de la marca (no gris neutro) — usa el mismo acero
-       que el resto del documento (--color-steel), acá con más presencia: la línea ya no
-       es tinta translúcida, es acero translúcido, y el folio/activo va en acero pleno en
-       vez de bajarle la opacidad. */
-    border-top: 1px solid rgb(76 107 122 / 35%);
+    gap: 8px;
     font-family: var(--font-mono);
     font-size: 9px;
     letter-spacing: 0.05em;
-    color: var(--color-steel);
+    color: var(--color-paper);
+    white-space: nowrap;
   }
-  .page-footer-brand {
-    text-transform: uppercase;
-    font-weight: 700;
-  }
-  .page-footer-doc {
-    opacity: 0.75;
+  /* Numeración corrida del documento (1 = Alcance y metodología … N = Conclusiones),
+     reusada acá como orientación de lectura — no es un contador de páginas de impresión
+     real (ver PageFooter.tsx sobre por qué). Separada del folio con un guion vertical
+     propio, en el acero de la marca para diferenciarla visualmente del folio (que va en
+     --color-paper, con más contraste). */
+  .page-footer-page {
+    padding-left: 8px;
+    border-left: 1px solid rgb(244 245 242 / 25%);
+    color: var(--color-steel-light);
   }
 
   /* ═════════════════ Portada ═════════════════ */
@@ -605,10 +661,12 @@
 
   /* ═════════════════ Encabezado de sección ═════════════════ */
   .section-head {
+    position: relative;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 16px;
+    padding-bottom: 14px;
     margin-bottom: 16px;
   }
   /* Marca chica al margen del encabezado — a pedido explícito: algo en la cabecera pero
@@ -623,6 +681,21 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-steel);
+  }
+  /* Barra de cierre del encabezado — mismo degradé de los dos azules de marca que el pie
+     de página (ver .page-footer::before), para enmarcar cada hoja y rellenar un poco más
+     el espacio en blanco de arriba, sin ser un ::before/::after que compita por el mismo
+     slot que la marca de arriba (ese usa ::after; position:absolute la saca del flujo
+     flex así no chocan). */
+  .section-head::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--color-steel), var(--color-steel-light));
   }
   .section-head-title {
     display: flex;
@@ -1107,17 +1180,12 @@
   .page:last-child {
     break-after: auto;
   }
-  .page.chapter {
-    /* A diferencia de portada/índice/síntesis/conclusiones (siempre una sola hoja),
-       un capítulo puede repartirse en varias hojas físicas si trae varias fotos (ver
-       comentario más arriba, "Documento y paginación"). min-height:11in aplicado a una
-       caja que se fragmenta en la impresión hace que Chrome estire cada fragmento para
-       cumplir el mínimo por separado, no en conjunto — la última hoja de un capítulo
-       corto de sobra queda con un hueco en blanco enorme antes del salto de página
-       forzado. Sin min-height no hay costura visible porque el fondo de body ya es
-       --color-paper (ver arriba), no hace falta que el div llegue al borde físico.  */
-    min-height: 0;
-  }
+  /* .page.chapter ya NO fija min-height acá (ni en 0 ni en 11in) — ver el bloque de
+     comentario junto a la regla de pantalla de .page.chapter para el porqué: el
+     min-height correcto (una hoja si el capítulo es corto, o el alto real del contenido
+     si es más largo) se calcula en JS (Chapter.tsx) y se aplica como estilo en línea,
+     igual en pantalla que en impresión — no hace falta una excepción de impresión
+     aparte. */
   .editable:empty::before {
     content: "";
   }

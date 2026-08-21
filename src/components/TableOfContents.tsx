@@ -11,7 +11,7 @@ interface Props {
   summaryNumber: number
   conclusionsNumber: number
   code: string
-  clientAsset: string
+  totalSections: number
 }
 
 // Los números de página reales no se calculan (no hay paginación fiable sin imprimir de
@@ -24,7 +24,7 @@ export function TableOfContents({
   summaryNumber,
   conclusionsNumber,
   code,
-  clientAsset,
+  totalSections,
 }: Props) {
   const included = chapters.filter((c) => c.included)
 
@@ -66,7 +66,7 @@ export function TableOfContents({
           </a>
         </li>
       </ol>
-      <PageFooter code={code} clientAsset={clientAsset} />
+      <PageFooter code={code} totalSections={totalSections} />
     </section>
   )
 }
