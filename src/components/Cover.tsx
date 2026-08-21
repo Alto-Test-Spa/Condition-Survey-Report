@@ -104,21 +104,29 @@ export function Cover({ report, onChange }: Props) {
       {/* Franja de estado: foto instantánea de severidad de los capítulos incluidos —
           reemplaza la firma técnica que iba acá (se movió al cierre del informe, ver
           Conclusions.tsx). Ningún informe de referencia de la competencia muestra esto
-          en portada; usa los mismos colores de acento que .chapter-aside. */}
+          en portada; usa los mismos colores de acento que .chapter-aside.
+          Los segmentos de la barra van agrupados por severidad (no uno por capítulo en
+          el orden en que aparecen) y la leyenda de abajo usa el mismo ancho proporcional
+          (flexGrow: count) que su bloque de color correspondiente, para que el número
+          quede debajo de su franja — pedido explícito de Camilo. */}
       {included.length > 0 && (
         <div className="cover-status">
+          <span className="cover-status-total">
+            {included.length} sistema{included.length === 1 ? '' : 's'} relevado
+            {included.length === 1 ? '' : 's'} en terreno
+          </span>
           <div className="cover-status-bar">
-            {included.map((c) => (
-              <span key={c.id} className={`cover-status-seg ${accentClass(c.severity)}`} />
+            {counts.map(({ severity, count }) => (
+              <span
+                key={severity}
+                className={`cover-status-seg ${accentClass(severity)}`}
+                style={{ flexGrow: count }}
+              />
             ))}
           </div>
           <div className="cover-status-legend">
-            <span className="cover-status-total">
-              {included.length} sistema{included.length === 1 ? '' : 's'} relevado
-              {included.length === 1 ? '' : 's'} en terreno
-            </span>
             {counts.map(({ severity, count }) => (
-              <span key={severity} className="cover-status-item">
+              <span key={severity} className="cover-status-item" style={{ flexGrow: count }}>
                 <span className={`cover-status-dot ${accentClass(severity)}`} />
                 {count} {count === 1 ? STATUS_LABEL[severity][0] : STATUS_LABEL[severity][1]}
               </span>

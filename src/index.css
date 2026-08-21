@@ -419,7 +419,11 @@
     justify-content: space-between;
     align-items: baseline;
     padding-top: 8px;
-    border-top: 1px solid rgb(16 21 30 / 10%);
+    /* Camilo pidió una variante azul de la marca (no gris neutro) — usa el mismo acero
+       que el resto del documento (--color-steel), acá con más presencia: la línea ya no
+       es tinta translúcida, es acero translúcido, y el folio/activo va en acero pleno en
+       vez de bajarle la opacidad. */
+    border-top: 1px solid rgb(76 107 122 / 35%);
     font-family: var(--font-mono);
     font-size: 9px;
     letter-spacing: 0.05em;
@@ -427,10 +431,10 @@
   }
   .page-footer-brand {
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 700;
   }
   .page-footer-doc {
-    opacity: 0.72;
+    opacity: 0.75;
   }
 
   /* ═════════════════ Portada ═════════════════ */
@@ -485,42 +489,49 @@
     font-size: 13px;
     color: var(--color-paper);
   }
-  /* Franja de estado: barra segmentada (1 segmento por capítulo incluido, coloreado por
-     severidad) + leyenda de conteo. Reusa las clases severity-critical/etc que ya pintan
-     el badge y el punto de SummaryTable — acá pintan el segmento/punto, mismo criterio
-     de color en todo el documento. */
+  /* Franja de estado: total arriba, barra agrupada por severidad al medio, conteo por
+     severidad abajo — pedido de Camilo: que el número de abajo quede debajo de su franja
+     de color. .cover-status-bar y .cover-status-legend son 2 filas flex separadas pero
+     con el mismo dato (`counts`) en el mismo orden y el mismo flexGrow por item (ver
+     Cover.tsx) — por eso cada leyenda arranca justo debajo de su bloque de color, sin
+     necesitar un grid ni medir nada a mano. Reusa las clases severity-critical/etc que
+     ya pintan el badge y el punto de SummaryTable — mismo criterio de color en todo el
+     documento. */
   .cover-status {
     margin-top: 48px;
   }
-  .cover-status-bar {
-    display: flex;
-    gap: 3px;
-    height: 8px;
-    margin-bottom: 16px;
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .cover-status-seg {
-    flex: 1 1 0;
-  }
-  .cover-status-legend {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 24px;
-    font-size: 11.5px;
-    color: var(--color-steel-pale);
-  }
   .cover-status-total {
+    display: block;
     font-family: var(--font-mono);
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--color-steel-light);
+    margin-bottom: 12px;
+  }
+  .cover-status-bar {
+    display: flex;
+    gap: 3px;
+    height: 8px;
+    margin-bottom: 8px;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .cover-status-seg {
+    flex-basis: 0;
+    flex-shrink: 1;
+  }
+  .cover-status-legend {
+    display: flex;
+    gap: 3px;
+    font-size: 11.5px;
+    color: var(--color-steel-pale);
   }
   .cover-status-item {
-    display: inline-flex;
-    align-items: center;
+    display: flex;
+    flex-basis: 0;
+    flex-shrink: 1;
+    align-items: flex-start;
     gap: 6px;
   }
   .cover-status-dot {
@@ -692,6 +703,15 @@
     border-bottom: 1px dashed rgb(76 107 122 / 42%);
   }
 
+  .rich-text {
+    /* Camilo pidió justificar el texto — antes sólo lo llevaba .lead (portada,
+       metodología, conclusiones, "próximos pasos"); las observaciones/recomendaciones
+       de cada capítulo usan RichText sin .lead y quedaban con el borde derecho irregular.
+       Se sube acá para que alcance a TODO texto largo del documento, no sólo al que ya
+       tenía el modificador .lead. */
+    text-align: justify;
+    hyphens: auto;
+  }
   .rich-text div {
     margin-top: 0.6em;
   }
@@ -703,8 +723,6 @@
     line-height: 1.62;
     color: var(--color-steel-body);
     max-width: 94%;
-    text-align: justify;
-    hyphens: auto;
   }
   .lead b,
   .lead strong {
