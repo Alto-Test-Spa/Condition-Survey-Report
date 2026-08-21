@@ -3,19 +3,29 @@ import ChecklistAlt from 'reicon-react/icons/ChecklistAlt'
 import ShieldCheck from 'reicon-react/icons/ShieldCheck'
 import type { NumberedChapter } from '../lib/chapters'
 import { CHAPTER_ICONS, DEFAULT_CHAPTER_ICON } from '../lib/chapterIcons'
+import { PageFooter } from './PageFooter'
 
 interface Props {
   chapters: NumberedChapter[]
   methodologyNumber: number
   summaryNumber: number
   conclusionsNumber: number
+  code: string
+  clientAsset: string
 }
 
 // Los números de página reales no se calculan (no hay paginación fiable sin imprimir de
 // verdad): el índice enlaza a cada capítulo por ancla, y esos enlaces se conservan en el
 // PDF que genera el navegador — igual que en propuesta_tecnica. Los números de sección sí
 // son reales: vienen de numberDocument, corridos de 1 a N para todo el documento.
-export function TableOfContents({ chapters, methodologyNumber, summaryNumber, conclusionsNumber }: Props) {
+export function TableOfContents({
+  chapters,
+  methodologyNumber,
+  summaryNumber,
+  conclusionsNumber,
+  code,
+  clientAsset,
+}: Props) {
   const included = chapters.filter((c) => c.included)
 
   return (
@@ -56,6 +66,7 @@ export function TableOfContents({ chapters, methodologyNumber, summaryNumber, co
           </a>
         </li>
       </ol>
+      <PageFooter code={code} clientAsset={clientAsset} />
     </section>
   )
 }

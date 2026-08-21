@@ -3,6 +3,7 @@ import type { ReportState } from '../types'
 import type { NumberedChapter } from '../lib/chapters'
 import { SEVERITY_LEVELS } from '../types'
 import { EditableText } from './EditableText'
+import { PageFooter } from './PageFooter'
 
 interface Props {
   report: ReportState
@@ -67,6 +68,7 @@ export function SummaryTable({ report, chapters, number, onChange }: Props) {
           ))}
         </tbody>
       </table>
+      <PageFooter code={report.code} clientAsset={report.clientAsset} />
     </section>
   )
 }

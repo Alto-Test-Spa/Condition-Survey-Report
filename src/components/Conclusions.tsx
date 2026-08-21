@@ -4,6 +4,7 @@ import type { ReportState } from '../types'
 import { EditableText } from './EditableText'
 import { RichText } from './RichText'
 import { IconEyebrow } from './IconEyebrow'
+import { PageFooter } from './PageFooter'
 
 interface Props {
   report: ReportState
@@ -47,6 +48,34 @@ export function Conclusions({ report, number, onChange }: Props) {
           placeholder="Invitación a continuar con el ciclo de servicios."
         />
       </div>
+
+      {/* Firma técnica: vivía en la portada, se movió acá (cierre del documento, no
+          apertura) al reemplazar el pie de portada por la franja de estado — ver
+          Cover.tsx. */}
+      <div className="closing-signature">
+        <EditableText
+          as="p"
+          className="closing-signature-name"
+          value={report.authorName}
+          onChange={(authorName) => onChange({ authorName })}
+          placeholder="Nombre del responsable técnico"
+        />
+        <EditableText
+          as="p"
+          className="closing-signature-role"
+          value={report.authorRole}
+          onChange={(authorRole) => onChange({ authorRole })}
+          placeholder="Cargo"
+        />
+        <EditableText
+          as="p"
+          className="closing-signature-role"
+          value={report.authorEmail}
+          onChange={(authorEmail) => onChange({ authorEmail })}
+          placeholder="correo@altotest.cl"
+        />
+      </div>
+      <PageFooter code={report.code} clientAsset={report.clientAsset} />
     </section>
   )
 }

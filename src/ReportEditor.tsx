@@ -12,6 +12,7 @@ import { SummaryTable } from './components/SummaryTable'
 import { Conclusions } from './components/Conclusions'
 import { EditableText } from './components/EditableText'
 import { RichText } from './components/RichText'
+import { PageFooter } from './components/PageFooter'
 
 interface Props {
   onAuthExpired: () => void
@@ -74,6 +75,8 @@ export default function ReportEditor({ onAuthExpired }: Props) {
           methodologyNumber={methodologyNumber}
           summaryNumber={summaryNumber}
           conclusionsNumber={conclusionsNumber}
+          code={report.code}
+          clientAsset={report.clientAsset}
         />
 
         <section id="methodology" className="page">
@@ -98,6 +101,7 @@ export default function ReportEditor({ onAuthExpired }: Props) {
             onChange={(methodology) => patchReport({ methodology })}
             placeholder="Describa el alcance y la metodología del levantamiento."
           />
+          <PageFooter code={report.code} clientAsset={report.clientAsset} />
         </section>
 
         {numberedChapters.map((chapter) => (
@@ -106,6 +110,8 @@ export default function ReportEditor({ onAuthExpired }: Props) {
             chapter={chapter}
             number={chapter.number}
             onChange={(next) => patchChapter(chapter.id, next)}
+            code={report.code}
+            clientAsset={report.clientAsset}
           />
         ))}
 

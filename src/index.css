@@ -403,40 +403,47 @@
       box-shadow: 0 0 0 1px rgb(16 21 30 / 6%), 0 20px 44px -24px rgb(16 21 30 / 40%);
     }
   }
+  /* Pie de página: position:absolute (no en el flujo normal) para no interferir con la
+     paginación de un capítulo que se reparte en varias hojas (ver Chapter.tsx). El
+     contenedor de referencia es .page, que ya es position:relative — bottom se mide
+     desde el borde de su padding-box, así que 0.35in cae dentro del padding existente
+     (0.85in) sin invadir el contenido ni pisar el borde físico del papel. No va en la
+     portada (.page.dark ya tiene peso visual propio con la ficha y la franja de estado).
+  */
+  .page-footer {
+    position: absolute;
+    left: 0.9in;
+    right: 0.9in;
+    bottom: 0.35in;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-top: 8px;
+    border-top: 1px solid rgb(16 21 30 / 10%);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    color: var(--color-steel);
+  }
+  .page-footer-brand {
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .page-footer-doc {
+    opacity: 0.72;
+  }
 
   /* ═════════════════ Portada ═════════════════ */
   .page.dark {
     background: var(--color-ink);
     color: var(--color-paper);
   }
-  .cover-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 48px;
-  }
-  .cover-meta-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    text-align: right;
-  }
-  .cover-meta-fields .eyebrow {
-    margin: 0;
-    color: var(--color-steel-light);
-  }
-  .cover-addressee {
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--color-steel-pale);
-    margin-bottom: 28px;
-  }
-  .cover-addressee p {
-    margin: 0;
+  .cover-brand {
+    margin-bottom: 56px;
   }
   .cover-title {
-    font-size: 30px;
-    line-height: 1.2;
+    font-size: 34px;
+    line-height: 1.16;
     font-weight: 600;
     letter-spacing: -0.04em;
     margin: 0 0 22px;
@@ -446,26 +453,100 @@
   }
   .cover .lead {
     color: var(--color-steel-pale);
-    max-width: 100%;
+    max-width: 88%;
   }
   .cover .lead b {
     color: var(--color-paper);
   }
-  .signature-block {
-    margin-top: 40px;
-    padding-top: 16px;
+  /* Fichita de hechos del documento: mismo lenguaje visual (etiqueta chica arriba,
+     valor abajo) que .chapter-aside .spec-grid, para que se sienta la misma familia de
+     componentes en vez de reinventar un tercer patrón sólo para la portada. */
+  .cover-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px 40px;
+    margin: 40px 0 0;
+    padding-top: 20px;
     border-top: 1px solid rgb(244 245 242 / 18%);
   }
-  .signature-block p {
+  .cover-fact {
+    min-width: 118px;
+  }
+  .cover-fact dt {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-steel-light);
+    margin-bottom: 4px;
+  }
+  .cover-fact dd {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-paper);
+  }
+  /* Franja de estado: barra segmentada (1 segmento por capítulo incluido, coloreado por
+     severidad) + leyenda de conteo. Reusa las clases severity-critical/etc que ya pintan
+     el badge y el punto de SummaryTable — acá pintan el segmento/punto, mismo criterio
+     de color en todo el documento. */
+  .cover-status {
+    margin-top: 48px;
+  }
+  .cover-status-bar {
+    display: flex;
+    gap: 3px;
+    height: 8px;
+    margin-bottom: 16px;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .cover-status-seg {
+    flex: 1 1 0;
+  }
+  .cover-status-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 24px;
+    font-size: 11.5px;
+    color: var(--color-steel-pale);
+  }
+  .cover-status-total {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-steel-light);
+  }
+  .cover-status-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cover-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+  }
+
+  /* ═════════════════ Firma de cierre (Conclusions) ═════════════════ */
+  /* Antes vivía en portada como .signature-block; se movió al cierre del documento.
+     Colores propios (no reutiliza --color-steel-light, pensado para fondo oscuro) porque
+     esta sección vive sobre --color-paper, no sobre --color-ink. */
+  .closing-signature {
+    margin-top: 32px;
+  }
+  .closing-signature p {
     margin: 0;
   }
-  .signature-name {
+  .closing-signature-name {
     font-size: 13px;
     font-weight: 600;
   }
-  .signature-role {
+  .closing-signature-role {
     font-size: 11px;
-    color: var(--color-steel-light);
+    color: var(--color-steel);
     margin-top: 2px !important;
   }
 
@@ -518,6 +599,19 @@
     align-items: flex-start;
     gap: 16px;
     margin-bottom: 16px;
+  }
+  /* Marca chica al margen del encabezado — a pedido explícito: algo en la cabecera pero
+     "sin invadir la sensación técnica" (Matías), así que es sólo texto, sin ícono ni dato
+     adicional. ::after entra como flex item más: justify-content:space-between ya lo
+     manda solo al extremo derecho, sin tocar el JSX de cada página. */
+  .section-head::after {
+    content: 'Alto Test';
+    align-self: center;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-steel);
   }
   .section-head-title {
     display: flex;
@@ -618,9 +712,83 @@
     color: var(--color-ink);
   }
 
+  /* ═════════════════ Cuerpo del capítulo: ficha fija + narrativa ═════════════════ */
+  /* Grid de 2 columnas, no un bloque único apilado (ficha -> observación -> foto ->
+     recomendación) como el informe de referencia de la competencia — ver CLAUDE.md,
+     "Decisiones del usuario". La ficha (aside) es angosta y de contenido fijo/corto: no
+     se espera que cruce una hoja física. La narrativa (main) sí puede crecer y repartirse
+     en varias hojas — .chapter-aside usa align-self:start para no estirarse a la altura
+     de esa columna cuando eso pasa, y no lleva min-height ni depende de que ambas
+     columnas terminen a la misma altura.  */
+  .chapter-body {
+    display: grid;
+    grid-template-columns: 1.9in 1fr;
+    column-gap: 28px;
+  }
+  .chapter-aside {
+    align-self: start;
+    border-left: 3px solid var(--color-steel);
+    padding-left: 14px;
+  }
+  .accent-critical .chapter-aside {
+    border-left-color: var(--color-signal);
+  }
+  .accent-needs-action .chapter-aside {
+    border-left-color: var(--color-signal-glow);
+  }
+  .accent-observation .chapter-aside {
+    border-left-color: var(--color-steel);
+  }
+  .accent-compliant .chapter-aside {
+    border-left-color: var(--color-steel-light);
+  }
+  .chapter-aside .severity-badge {
+    display: inline-block;
+    margin-bottom: 14px;
+  }
+  .chapter-main {
+    min-width: 0;
+  }
+
   /* ═════════════════ Ficha técnica ═════════════════ */
   .spec-table {
     margin-bottom: 8px;
+  }
+  /* Dentro de la ficha lateral (angosta) la tabla clave-valor pasa de 2 columnas a
+     filas apiladas — campo chico arriba, valor debajo — no cabría legible a 1.9in de
+     ancho como tabla de 2 columnas. El componente (SpecTable.tsx) no cambia, sólo el
+     layout CSS cuando vive dentro de .chapter-aside. */
+  .chapter-aside .spec-grid,
+  .chapter-aside .spec-grid tbody,
+  .chapter-aside .spec-grid tr,
+  .chapter-aside .spec-field,
+  .chapter-aside .spec-value,
+  .chapter-aside .spec-action {
+    display: block;
+    width: auto;
+  }
+  .chapter-aside .spec-grid tr {
+    position: relative;
+    padding: 9px 22px 9px 0;
+  }
+  .chapter-aside .spec-field {
+    padding: 0 0 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-steel);
+  }
+  .chapter-aside .spec-value {
+    padding: 0;
+    font-size: 13px;
+    color: var(--color-ink);
+  }
+  .chapter-aside .spec-action {
+    position: absolute;
+    top: 7px;
+    right: 0;
+    padding: 0;
   }
   .spec-table-head {
     display: flex;
@@ -891,7 +1059,10 @@
 @media print {
   html,
   body {
-    background: #fff;
+    /* Antes era #fff, distinto del --color-paper (#f4f5f2) de .page: el hueco que deja
+       .chapter con min-height:0 (ver abajo) quedaba blanco puro en vez de tono papel,
+       una costura visible idéntica al bug de la portada corta ya cazado una vez. */
+    background: var(--color-paper);
   }
   .no-print {
     display: none !important;
@@ -907,9 +1078,27 @@
     border-radius: 0;
     box-shadow: none;
     break-after: page;
+    /* box-decoration-break:slice (el valor por defecto) sólo aplica el padding de arriba
+       al primer fragmento de la caja y el de abajo al último — si un capítulo se
+       reparte en 2+ hojas físicas, las hojas intermedias quedan con las fotos pegadas
+       al borde superior, sin margen. `clone` repite el padding completo en cada
+       fragmento, como si cada hoja física tuviera su propio margen. */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
   .page:last-child {
     break-after: auto;
+  }
+  .page.chapter {
+    /* A diferencia de portada/índice/síntesis/conclusiones (siempre una sola hoja),
+       un capítulo puede repartirse en varias hojas físicas si trae varias fotos (ver
+       comentario más arriba, "Documento y paginación"). min-height:11in aplicado a una
+       caja que se fragmenta en la impresión hace que Chrome estire cada fragmento para
+       cumplir el mínimo por separado, no en conjunto — la última hoja de un capítulo
+       corto de sobra queda con un hueco en blanco enorme antes del salto de página
+       forzado. Sin min-height no hay costura visible porque el fondo de body ya es
+       --color-paper (ver arriba), no hace falta que el div llegue al borde físico.  */
+    min-height: 0;
   }
   .editable:empty::before {
     content: "";
