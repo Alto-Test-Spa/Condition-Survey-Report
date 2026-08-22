@@ -1,8 +1,12 @@
-import type { ChapterState, ReportState } from '../types'
+import type { ChapterState, ParagraphItem, ReportState } from '../types'
 import { generateId } from './code'
 
 function specRow(field: string, value = ''): { id: string; field: string; value: string } {
   return { id: generateId(), field, value }
+}
+
+function paragraph(text = ''): ParagraphItem {
+  return { id: generateId(), text }
 }
 
 function emptyChapter(id: string, title: string, fields: string[]): ChapterState {
@@ -13,9 +17,12 @@ function emptyChapter(id: string, title: string, fields: string[]): ChapterState
     severity: 'observation',
     specTitle: 'Elementos inspeccionados',
     spec: fields.map((field) => specRow(field)),
-    observations: '',
+    // Arranca con un párrafo en blanco ya visible (igual que la ficha técnica arranca
+    // con sus filas), no con la lista vacía — así hay dónde escribir sin tener que
+    // apretar "Agregar" antes de la primera palabra.
+    observations: [paragraph()],
     photos: [],
-    recommendations: '',
+    recommendations: [paragraph()],
   }
 }
 
@@ -55,19 +62,29 @@ const CHAPTER_ANCHORS: ChapterState = {
     specRow('Etiquetado físico', 'Ausente en la mayoría de los puntos'),
     specRow('Fecha de última certificación', '—'),
   ],
-  observations:
-    '<div>Los puntos de anclaje unipersonales se encuentran instalados y en uso activo. ' +
-    'Sin embargo, <b>la mayoría no presenta etiquetado visible</b> pese a que fue incorporado en la ' +
-    'última certificación registrada, lo que dificulta verificar en terreno su estado de vigencia y ' +
-    'trazabilidad individual sin recurrir al registro documental.</div>',
+  observations: [
+    paragraph(
+      'Los puntos de anclaje unipersonales se encuentran instalados y en uso activo. ' +
+        'Sin embargo, <b>la mayoría no presenta etiquetado visible</b> pese a que fue incorporado en la ' +
+        'última certificación registrada, lo que dificulta verificar en terreno su estado de vigencia y ' +
+        'trazabilidad individual sin recurrir al registro documental.',
+    ),
+  ],
   photos: [],
-  recommendations:
-    '<div><b>Recertificación periódica:</b> gestionar la recertificación de cada punto mediante ensayos ' +
-    'mecánicos no destructivos, conforme a NCh 1258 y EN 795:2012.</div>' +
-    '<div><b>Etiquetado y trazabilidad:</b> reinstalar de forma visible las etiquetas de identificación, ' +
-    'con numeración correlativa de control.</div>' +
-    '<div><b>Registro documental:</b> mantener actualizados los registros de inspección, mantención y ' +
-    'certificación de cada anclaje.</div>',
+  recommendations: [
+    paragraph(
+      '<b>Recertificación periódica:</b> gestionar la recertificación de cada punto mediante ensayos ' +
+        'mecánicos no destructivos, conforme a NCh 1258 y EN 795:2012.',
+    ),
+    paragraph(
+      '<b>Etiquetado y trazabilidad:</b> reinstalar de forma visible las etiquetas de identificación, ' +
+        'con numeración correlativa de control.',
+    ),
+    paragraph(
+      '<b>Registro documental:</b> mantener actualizados los registros de inspección, mantención y ' +
+        'certificación de cada anclaje.',
+    ),
+  ],
 }
 
 const CHAPTER_LIFELINES = emptyChapter('lifelines', 'Líneas de vida', [
@@ -129,4 +146,31 @@ export function initialTemplate(): ReportState {
     authorRole: 'Profesional en Prevención de Riesgos',
     authorEmail: '',
   }
+}
+
+// Migra un informe leído desde el mirror local o el Worker: observations/recommendations
+// pasaron de un solo string con <div>s (separados a mano con Enter) a una lista de
+// párrafos independientes. Un informe guardado antes de este cambio todavía trae el
+// string viejo — se trata igual que el folio con formato viejo (ver isValidCode()): no
+// se descarta, se reinterpreta. Cada <div> de nivel superior se vuelve un párrafo propio,
+// para no perder la separación que el autor ya había hecho a mano.
+export function normalizeReport(raw: ReportState): ReportState {
+  return { ...raw, chapters: raw.chapters.map(normalizeChapterParagraphs) }
+}
+
+function normalizeChapterParagraphs(chapter: ChapterState): ChapterState {
+  return {
+    ...chapter,
+    observations: toParagraphItems(chapter.observations),
+    recommendations: toParagraphItems(chapter.recommendations),
+  }
+}
+
+function toParagraphItems(value: ParagraphItem[] | string): ParagraphItem[] {
+  if (Array.isArray(value)) return value
+  if (!value) return []
+  const doc = new DOMParser().parseFromString(value, 'text/html')
+  const divs = [...doc.body.children].filter((el) => el.tagName === 'DIV')
+  const parts = divs.length > 0 ? divs.map((el) => el.innerHTML) : [value]
+  return parts.filter(Boolean).map((text) => paragraph(text))
 }

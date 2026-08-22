@@ -19,6 +19,11 @@ export interface SpecRow {
   value: string
 }
 
+export interface ParagraphItem {
+  id: string
+  text: string
+}
+
 export interface ChapterState {
   id: string
   title: string
@@ -26,9 +31,9 @@ export interface ChapterState {
   severity: Severity
   specTitle: string
   spec: SpecRow[]
-  observations: string
+  observations: ParagraphItem[]
   photos: PhotoItem[]
-  recommendations: string
+  recommendations: ParagraphItem[]
 }
 
 export interface ReportState {

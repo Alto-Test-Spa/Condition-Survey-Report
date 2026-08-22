@@ -791,6 +791,43 @@
   .rich-text div:first-child {
     margin-top: 0;
   }
+  /* Envoltorio del contentEditable: sólo existe para darle un punto de referencia al
+     botón flotante de formato (ver RichText.tsx) — no lleva estilos propios de tamaño ni
+     de texto, así que un campo con .lead u otro modificador se ve exactamente igual que
+     antes de agregar este wrapper. */
+  .rich-text-wrap {
+    position: relative;
+  }
+  /* Botón de negrita/cursiva: aparece pegado a la selección de texto (posición fija,
+     calculada en JS desde getBoundingClientRect de la selección — ver RichText.tsx), no
+     como parte del flujo normal del documento. Ctrl/Cmd+B ya aplicaba el formato antes,
+     pero no era descubrible sin este control visible. */
+  .format-toolbar {
+    position: fixed;
+    transform: translate(-50%, calc(-100% - 8px));
+    display: flex;
+    gap: 2px;
+    background: var(--color-ink);
+    border-radius: 3px;
+    padding: 3px;
+    box-shadow: 0 4px 12px rgb(16 21 30 / 30%);
+    z-index: 70;
+  }
+  .format-toolbar button {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    color: var(--color-paper);
+    cursor: pointer;
+  }
+  .format-toolbar button:hover {
+    background: var(--color-signal);
+  }
   .lead {
     font-size: 13px;
     line-height: 1.62;
@@ -839,6 +876,45 @@
   }
   .chapter-main {
     min-width: 0;
+  }
+
+  /* ═════════════════ Observaciones / recomendaciones ═════════════════ */
+  /* Antes: un solo RichText gigante donde cada punto se separaba escribiendo Enter y
+     numerando a mano ("1. ... 2. ..."). Ahora: un párrafo por punto, agregado/quitado
+     igual que una fila de SpecTable (ver ParagraphList.tsx) — la numeración la pone acá
+     el counter, nunca el contenido, así que agregar/quitar un párrafo no desincroniza el
+     número de los que quedan. Tamaño heredado por el hijo .rich-text: mismo 13px/1.62 que
+     ya usa .lead en el resto del documento (portada, metodología, conclusiones) — el
+     cuadro gigante anterior no tenía tamaño propio y quedaba al default del navegador
+     (16px), notoriamente más grande que todo lo demás (feedback de Camilo). */
+  .paragraph-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    counter-reset: paragraph;
+    font-size: 13px;
+    line-height: 1.62;
+    color: var(--color-steel-body);
+  }
+  .paragraph-item {
+    position: relative;
+    counter-increment: paragraph;
+    display: flex;
+    gap: 6px;
+    padding-right: 24px;
+  }
+  .paragraph-item::before {
+    content: counter(paragraph) '.';
+    flex: 0 0 auto;
+  }
+  .paragraph-item .rich-text-wrap {
+    flex: 1;
+    min-width: 0;
+  }
+  .paragraph-remove {
+    position: absolute;
+    top: 0;
+    right: 0;
   }
 
   /* ═════════════════ Ficha técnica ═════════════════ */
@@ -1200,7 +1276,8 @@
   .spec-grid tr,
   .photo-card,
   .toc li,
-  .summary-grid tr {
+  .summary-grid tr,
+  .paragraph-item {
     break-inside: avoid;
   }
   .heading-lg,

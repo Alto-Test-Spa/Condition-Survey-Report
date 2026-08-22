@@ -4,7 +4,7 @@ import Camera from 'reicon-react/icons/Camera'
 import ClipboardCheck from 'reicon-react/icons/ClipboardCheck'
 import type { ChapterState, Severity } from '../types'
 import { EditableText } from './EditableText'
-import { RichText } from './RichText'
+import { ParagraphList } from './ParagraphList'
 import { SpecTable } from './SpecTable'
 import { PhotoGallery } from './PhotoGallery'
 import { SeverityBadge } from './SeverityBadge'
@@ -152,10 +152,11 @@ export function Chapter({ chapter, number, onChange, code, sectionNumber, totalS
             <IconEyebrow icon={Eye} className="block-label">
               Observaciones
             </IconEyebrow>
-            <RichText
-              value={chapter.observations}
+            <ParagraphList
+              items={chapter.observations}
               onChange={(observations) => patch({ observations })}
               placeholder="Describa lo constatado en terreno para este elemento."
+              addLabel="Agregar observación"
             />
 
             <IconEyebrow icon={Camera} className="block-label">
@@ -166,10 +167,11 @@ export function Chapter({ chapter, number, onChange, code, sectionNumber, totalS
             <IconEyebrow icon={ClipboardCheck} className="block-label">
               Recomendaciones
             </IconEyebrow>
-            <RichText
-              value={chapter.recommendations}
+            <ParagraphList
+              items={chapter.recommendations}
               onChange={(recommendations) => patch({ recommendations })}
               placeholder="Indique las acciones recomendadas para este capítulo."
+              addLabel="Agregar recomendación"
             />
           </div>
         </div>

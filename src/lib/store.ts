@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReportState } from '../types'
-import { initialTemplate } from './template'
+import { initialTemplate, normalizeReport } from './template'
 import { generateCode, isValidCode } from './code'
 import { todayDate } from './date'
 import { fetchReport, saveReport, ApiError } from './api'
@@ -25,7 +25,7 @@ function readMirror(): ReportState | null {
   const saved = localStorage.getItem(MIRROR_KEY)
   if (!saved) return null
   try {
-    return { ...initialTemplate(), ...(JSON.parse(saved) as Partial<ReportState>) }
+    return normalizeReport({ ...initialTemplate(), ...(JSON.parse(saved) as Partial<ReportState>) })
   } catch {
     return null
   }

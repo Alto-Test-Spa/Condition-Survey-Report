@@ -1,4 +1,5 @@
 import type { ReportState } from '../types'
+import { normalizeReport } from './template'
 
 const BASE_URL = import.meta.env.VITE_REPORTS_ENDPOINT
 const ACCESS_KEY_STORAGE = 'altotest_informe_levantamiento_access_key'
@@ -80,7 +81,7 @@ export function listReports(): Promise<ReportSummary[]> {
 
 export async function fetchReport(code: string): Promise<ReportState> {
   const envelope = await request<ReportEnvelope>(`/reports/${KIND}/${encodeURIComponent(code)}`)
-  return envelope.doc
+  return normalizeReport(envelope.doc)
 }
 
 export function saveReport(report: ReportState): Promise<{ ok: boolean; updatedAt: number }> {
