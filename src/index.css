@@ -513,7 +513,6 @@
   }
   .cover .lead {
     color: var(--color-steel-pale);
-    max-width: 88%;
   }
   .cover .lead b {
     color: var(--color-paper);
@@ -829,10 +828,14 @@
     background: var(--color-signal);
   }
   .lead {
+    /* Sin max-width: Camilo pidió que toda caja de texto ocupe el mismo ancho que el
+       resto del documento (la franja de metodología, "Próximos pasos", las observaciones
+       de cada capítulo — ninguna de esas recorta su ancho). Antes .lead quedaba angosto
+       (94%) mientras todo lo demás llegaba al mismo borde que la línea divisoria gris del
+       encabezado de sección (.section-head::before, ancho completo). */
     font-size: 13px;
     line-height: 1.62;
     color: var(--color-steel-body);
-    max-width: 94%;
   }
   .lead b,
   .lead strong {
@@ -901,7 +904,6 @@
     counter-increment: paragraph;
     display: flex;
     gap: 6px;
-    padding-right: 24px;
   }
   .paragraph-item::before {
     content: counter(paragraph) '.';
@@ -911,10 +913,21 @@
     flex: 1;
     min-width: 0;
   }
+  /* Antes .paragraph-item reservaba 24px de padding-right sólo para este botón —
+     angostaba el texto (y el de impresión, aunque el botón sea no-print) frente a
+     "Agregar observación/recomendación" debajo, que sí ocupa el ancho completo
+     (feedback de Camilo). Ahora el texto llega al mismo borde; el botón se apoya
+     sobre la esquina inferior derecha (no la superior) a propósito: .rich-text es
+     justificado, así que sólo la ÚLTIMA línea de cada párrafo queda sin estirar y
+     casi siempre deja espacio libre a la derecha — apoyarlo ahí es mucho menos
+     probable que tape una letra real que hacerlo sobre la primera línea (que el
+     justificado sí estira hasta el borde). Fondo sólido (no transparente) igual,
+     como red de seguridad para el caso borde en que la última línea sea larga. */
   .paragraph-remove {
     position: absolute;
-    top: 0;
+    bottom: 0;
     right: 0;
+    background: var(--color-paper);
   }
 
   /* ═════════════════ Ficha técnica ═════════════════ */
@@ -1208,7 +1221,6 @@
   }
   .closing-box .lead {
     color: var(--color-steel-pale);
-    max-width: 100%;
   }
   .closing-box .lead b {
     color: var(--color-paper);
