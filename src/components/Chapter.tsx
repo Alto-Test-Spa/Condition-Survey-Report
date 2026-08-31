@@ -46,38 +46,34 @@ const ACCENT_CLASS: Record<Severity, string> = {
 }
 
 export function Chapter({ chapter, number, onChange, code, sectionNumber, totalSections }: Props) {
-  // Un capítulo puede crecer más de una hoja (varias fotos): .page.chapter no lleva
-  // min-height fijo en CSS (ver index.css), así que el pie no tiene contra qué hoja
-  // "pegarse abajo" cuando el contenido es corto — sin ayuda extra queda inmediatamente
-  // después del contenido, con el resto de la hoja física en blanco (bug reportado por
-  // Camilo/Matías). Se resuelve calculando acá, en cada cambio del capítulo, la altura
-  // mínima real que debe tener la sección — una hoja completa si el contenido entra
-  // (con margen de seguridad), o el alto real del contenido si ya es más largo — y
-  // aplicándola como min-height en línea. .page.chapter es flex-column (ver index.css) y
-  // el pie lleva margin-top:auto, así que una vez fijado el min-height correcto, el pie
-  // se pega solo al fondo — no hace falta spacer ni medir la posición del pie por
-  // separado.
+  // Un capítulo puede crecer más de una hoja (varias fotos, texto largo): .page.chapter
+  // no lleva min-height fijo en CSS (ver index.css). El pie va position:absolute;bottom:0
+  // (igual que en todas las demás páginas), así que queda anclado contra el min-height
+  // que fijemos acá — y "bottom:0" sólo cae al borde inferior de una hoja física si ese
+  // min-height es un múltiplo EXACTO del alto de una hoja. Por eso el cálculo de abajo
+  // redondea SIEMPRE hacia arriba a la siguiente hoja completa; nunca deja el alto
+  // "pelado" del contenido, que casi nunca es un múltiplo redondo.
   //
-  // Se mide con offsetHeight de dos contenedores simples (contenido, pie), NUNCA a partir
-  // de un estado anterior — cada cálculo es independiente y no arrastra error de una
-  // medición previa. Un intento anterior (getBoundingClientRect + acumulador de estado
-  // con setFillerPx(prev => prev + deficit)) sí podía arrastrar error: si una medición
-  // se tomaba en un instante con el layout todavía asentándose, ese error quedaba
-  // parcialmente "guardado" en el estado y sólo se corregía a medias en la siguiente
-  // pasada — confirmado esta sesión con una traza real (una sección con dos párrafos de
-  // observaciones terminó más alta que una hoja vacía, algo que no tiene sentido si el
-  // cálculo fuera siempre desde cero).
+  // Se mide con offsetHeight de dos contenedores simples (contenido, pie), y CADA cálculo
+  // parte de cero — nunca a partir de un estado anterior.
   //
-  // Segundo bug real, distinto y posterior: <PageFooter> recibe el ref DIRECTAMENTE (ver
-  // PageFooter.tsx, React 19 sin forwardRef) — antes vivía envuelto en un <div
-  // ref={footerRef}> sólo para poder medirlo, y margin-top:auto (el truco que lo pega
-  // abajo) estaba en .page-footer, un NIETO del flex container, no un hijo directo. Un
-  // margin:auto en el eje del bloque sólo hace algo especial en un ítem flex directo — en
-  // cualquier descendiente más profundo simplemente vale 0. El resultado: min-height se
-  // aplicaba bien (la sección sí medía una hoja completa), pero el pie igual quedaba
-  // pegado justo después del contenido, con el resto de la hoja en blanco por debajo sin
-  // usar — confirmado midiendo el DOM directo (sección a 1056px, pie apareciendo a los
-  // ~360px). Con <PageFooter> como hijo directo, el pie sí es el que recibe el margen.
+  // Caminos ya recorridos, no volver a ellos:
+  //  - Spacer invisible + getBoundingClientRect + acumulador de estado
+  //    (setFillerPx(prev => prev + deficit)): arrastraba el error de una medición tomada
+  //    con el layout a medio asentar y capítulos cortos terminaban midiendo más que una
+  //    hoja entera (confirmado con una traza real).
+  //  - Alto "pelado" del contenido apenas éste no entraba con el margen de sobra: dejaba
+  //    CERO colchón justo en el caso borde (un capítulo que en pantalla medía 1030px
+  //    quedaba en 1030px y al imprimir se pasaba unos píxeles, con el pie solo en una
+  //    segunda hoja casi vacía). De ahí que el redondeo sea SIEMPRE hacia arriba.
+  //  - flex-column con el pie en margin-top:auto: se rompía al fragmentar la caja en 2+
+  //    hojas al imprimir (bug de fragmentación de flexbox de Chromium). Se abandonó
+  //    flexbox — el pie es position:absolute y un elemento absoluto queda fuera del flujo
+  //    de fragmentación de CSS Paged Media, así que no hereda ese bug.
+  //  - Con ese flex, <PageFooter> vivía envuelto en un <div ref={footerRef}> y el
+  //    margin-top:auto (en un nieto, no un hijo flex directo) no empujaba nada. Hoy
+  //    <PageFooter> recibe el ref DIRECTAMENTE (React 19, sin forwardRef) — se mide sin
+  //    envolverlo.
   const contentRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLElement>(null)
   const [minHeightPx, setMinHeightPx] = useState(PAGE_HEIGHT_PX)
@@ -87,21 +83,20 @@ export function Chapter({ chapter, number, onChange, code, sectionNumber, totalS
     const footerEl = footerRef.current
     if (!contentEl || !footerEl) return
     const naturalHeight = contentEl.offsetHeight + footerEl.offsetHeight + PAGE_VERTICAL_PADDING_PX
-    // min-height es un PISO, no un techo: si el contenido real (medido al imprimir) es
-    // más alto que lo que fijemos acá, la sección va a crecer igual, sin importar qué
-    // número pongamos. Por eso, salvo que el contenido exceda claramente una hoja (más
-    // que el margen de seguridad de sobra), conviene forzar SIEMPRE la hoja completa —
-    // eso es lo que le da colchón real contra la diferencia pantalla/impresión, no al
-    // revés. Un intento anterior hacía lo opuesto (usar el alto real "pelado" apenas el
-    // contenido no entraba con margen de sobra) y eso dejaba CERO colchón justo en el
-    // caso borde que más lo necesitaba — bug real, confirmado con "Puntos de anclaje"
-    // (naturalHeight medía 1030px en pantalla, la sección quedaba en 1030px sin margen, y
-    // al imprimir de verdad se pasaba de la hoja física por unos pocos píxeles, dejando
-    // el pie solo en una segunda hoja casi en blanco). Sólo se abandona la hoja completa
-    // cuando el contenido de verdad necesita más — ahí no hay margen que alcance, así que
-    // no tiene sentido fingir que cabe en una sola hoja.
-    const isDefinitelyMultiPage = naturalHeight > PAGE_HEIGHT_PX + SAFETY_MARGIN_PX
-    setMinHeightPx(isDefinitelyMultiPage ? naturalHeight : PAGE_HEIGHT_PX)
+    // Cuántas hojas físicas completas necesita el capítulo. min-height es un PISO, no un
+    // techo: si el contenido real al imprimir queda más alto, la sección crece igual — por
+    // eso se redondea hacia ARRIBA a la hoja completa, para que el pie (bottom:0) caiga
+    // siempre al borde de una hoja y no a media hoja cuando el capítulo se reparte en
+    // varias (bug real: Camilo reportó un capítulo de 4 recomendaciones que se partía en
+    // 2 hojas y dejaba el pie flotando a ~1/3 de la segunda, con el resto en blanco).
+    //
+    // El colchón (SAFETY_MARGIN_PX) se RESTA antes de dividir, no se suma: un capítulo que
+    // en pantalla mide un pelo más que N hojas —dentro del ruido de medición
+    // pantalla/impresión— se queda en N y no salta a N+1 por unos pocos píxeles. Es el
+    // mismo criterio que antes valía sólo para la primera hoja ("forzar la hoja completa
+    // salvo que el contenido exceda claramente el límite"), ahora para cualquier N.
+    const pageCount = Math.max(1, Math.ceil((naturalHeight - SAFETY_MARGIN_PX) / PAGE_HEIGHT_PX))
+    setMinHeightPx(pageCount * PAGE_HEIGHT_PX)
     // Depende de `chapter` completo (no de un campo puntual): cualquier cambio — texto,
     // fotos, severidad, filas de la ficha — puede alterar el alto real del contenido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,6 +109,10 @@ export function Chapter({ chapter, number, onChange, code, sectionNumber, totalS
   }
 
   const ChapterIcon = CHAPTER_ICONS[chapter.id] ?? DEFAULT_CHAPTER_ICON
+
+  // Cuántas hojas físicas ocupa el capítulo (minHeightPx ya es un múltiplo exacto del alto
+  // de una hoja, ver arriba). Un capítulo de una sola hoja no lleva rótulo de continuación.
+  const sheetCount = Math.max(1, Math.round(minHeightPx / PAGE_HEIGHT_PX))
 
   return (
     <section id={`chapter-${chapter.id}`} className="page chapter" style={{ minHeight: minHeightPx }}>
@@ -176,6 +175,30 @@ export function Chapter({ chapter, number, onChange, code, sectionNumber, totalS
           </div>
         </div>
       </div>
+
+      {/* Rótulo de continuación en la banda de padding superior de cada hoja física
+          posterior a la primera — orienta al lector en un capítulo que se reparte en
+          varias hojas y le da un ancla arriba que hace juego con el pie abajo, para que el
+          blanco del medio se lea como "la sección sigue". Sólo impresión: en pantalla el
+          capítulo es un bloque continuo sin corte de hoja (ver index.css, .chapter-cont).
+          Mismo mecanismo que PageFooter — position:absolute contra el min-height ya
+          redondeado a hojas completas, así `top: k * PAGE_HEIGHT_PX` cae justo al inicio
+          de la hoja k+1 y queda fuera del flujo de fragmentación de CSS Paged Media. */}
+      {Array.from({ length: sheetCount - 1 }, (_, i) => (
+        <div
+          key={i}
+          className="chapter-cont"
+          aria-hidden="true"
+          style={{ top: (i + 1) * PAGE_HEIGHT_PX }}
+        >
+          <span className="chapter-cont-title">
+            {number != null && <span className="chapter-cont-number">{number}</span>}
+            {chapter.title}
+          </span>
+          <span className="chapter-cont-tag">continúa</span>
+        </div>
+      ))}
+
       <PageFooter ref={footerRef} code={code} sectionNumber={sectionNumber} totalSections={totalSections} />
     </section>
   )

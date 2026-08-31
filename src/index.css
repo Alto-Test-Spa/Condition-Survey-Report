@@ -881,6 +881,48 @@
     min-width: 0;
   }
 
+  /* Rótulo de continuación: aparece en la banda de padding superior de cada hoja física
+     posterior a la primera cuando un capítulo se reparte en varias (ver Chapter.tsx). Sólo
+     impresión — se activa en el bloque @media print de abajo; en pantalla el capítulo es un
+     bloque continuo y el contenido fluiría por encima de este rótulo. Posición absoluta
+     contra el min-height del capítulo (múltiplo exacto de hoja), igual que .page-footer:
+     con left/right:0 sangra hasta el borde físico pese al padding de .page, y `top` (en
+     línea, k * alto de hoja) lo deja al inicio de cada hoja de continuación. Estilo
+     discreto — línea fina + rótulo, NO una segunda franja sólida como el pie. */
+  .chapter-cont {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    /* padding lateral = el de .page, para alinear el rótulo con el cuerpo del capítulo; el
+       padding-top lo baja dentro de los 0.85in de margen superior de la hoja, sin llegar a
+       donde arranca el contenido fragmentado (~0.85in). */
+    padding: 26px 0.9in 6px;
+    border-bottom: 1.5px solid var(--color-steel-pale);
+  }
+  .chapter-cont-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-steel-body);
+  }
+  .chapter-cont-number {
+    font-family: var(--font-mono);
+    color: var(--color-signal);
+    margin-right: 7px;
+  }
+  .chapter-cont-tag {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-steel-light);
+  }
+
   /* ═════════════════ Observaciones / recomendaciones ═════════════════ */
   /* Antes: un solo RichText gigante donde cada punto se separaba escribiendo Enter y
      numerando a mano ("1. ... 2. ..."). Ahora: un párrafo por punto, agregado/quitado
@@ -1297,6 +1339,18 @@
   .subheading,
   .block-label {
     break-after: avoid;
+  }
+  /* Rótulo de continuación de capítulo: sólo tiene sentido impreso (en pantalla el
+     capítulo es un bloque continuo — ver .chapter-cont en @layer components). */
+  .chapter-cont {
+    display: flex;
+  }
+  /* Huérfano: no dejar el último párrafo de observaciones/recomendaciones solo en la hoja
+     de continuación — que "avoid" empuje el salto una posición antes y bajen al menos dos
+     juntos. `:last-of-type` y no `:last-child` porque el último hijo real de .paragraph-list
+     es el botón "Agregar" (no-print, pero sigue en el DOM). */
+  .chapter-main .paragraph-item:last-of-type {
+    break-before: avoid;
   }
   * {
     -webkit-print-color-adjust: exact !important;

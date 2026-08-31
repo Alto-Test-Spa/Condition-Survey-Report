@@ -13,10 +13,10 @@ interface Props {
 // Pie de página repetido en cada hoja de papel (no en la portada, que ya tiene peso
 // visual propio con la ficha y la franja de estado) — responde al feedback de Camilo de
 // que las hojas se sentían muy blancas, y de paso identifica una hoja suelta si el PDF
-// se separa al imprimir. Posicionado con position:absolute (o, dentro de un capítulo,
-// margin-top:auto en un flex column — ver index.css) dentro de .page, en vez de ir
-// siempre en el flujo normal, para no interferir con la paginación de los capítulos que
-// pueden repartirse en más de una hoja.
+// se separa al imprimir. Posicionado con position:absolute;bottom:0 dentro de .page (en
+// los capítulos, contra el min-height redondeado a hoja completa que calcula Chapter.tsx
+// — ver ahí), en vez de ir en el flujo normal, para no interferir con la paginación de
+// los capítulos que pueden repartirse en más de una hoja.
 //
 // Cuarta vuelta de diseño (Matías): la catenaria (el ícono del isotipo) "no convenció
 // para nada" — pidió texto en su lugar, y de paso sumar algo de orientación ("quizás
@@ -28,17 +28,15 @@ interface Props {
 // metodología … N = Conclusiones) — es información real y consistente con el resto del
 // documento, no un contador inventado sólo para el pie.
 //
-// Bug real cazado esta sesión: dentro de un capítulo, .page.chapter es flex-column y el
-// pie usa margin-top:auto para pegarse abajo — pero ese margen SÓLO empuja si se aplica
-// al hijo DIRECTO del contenedor flex. Chapter.tsx envolvía este componente en un <div
-// ref={footerRef}> para poder medir su alto, y margin-top:auto vivía en .page-footer (un
-// nieto del flex, no un hijo) — en un elemento normal de flujo (no ítem flex, no
-// posicionado), margin:auto en el eje del bloque simplemente vale 0, así que el pie
-// quedaba pegado justo después del contenido en vez de abajo del todo, con toda la hoja
-// en blanco por debajo sin usar (confirmado con una medición directa del DOM: la sección
-// medía 1056px de alto pero el pie aparecía a los ~360px, no cerca de 1056). El fix es
-// que PageFooter reciba el ref directamente (React 19, sin forwardRef) para que sea el
-// propio <footer> el hijo flex — no un contenedor intermedio.
+// Bug real ya cazado (histórico): una versión intermedia hacía .page.chapter flex-column
+// con el pie en margin-top:auto para pegarlo abajo — pero ese margen SÓLO empuja si se
+// aplica al hijo DIRECTO del contenedor flex, y Chapter.tsx envolvía este componente en
+// un <div ref={footerRef}> para medirlo, con lo que margin-top:auto quedaba en un nieto y
+// valía 0 (el pie pegado justo tras el contenido, con la hoja en blanco debajo). De ahí
+// quedan dos cosas: (1) PageFooter recibe el ref DIRECTAMENTE (React 19, sin forwardRef),
+// nunca envuelto; (2) el enfoque flex se abandonó del todo — el pie es
+// position:absolute;bottom:0 (ver index.css) y Chapter.tsx sólo le da el min-height
+// correcto, redondeado a hoja completa.
 export function PageFooter({ code, sectionNumber, totalSections, ref }: Props) {
   return (
     <footer ref={ref} className="page-footer">

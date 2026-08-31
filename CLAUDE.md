@@ -445,14 +445,23 @@ que el capítulo cambia (texto, fotos, severidad, filas de la ficha — depende
 del objeto `chapter` completo, no de un campo puntual) y aplica el resultado
 como `style={{ minHeight }}` en línea sobre el propio `<section>`:
 
-- Si el contenido entra en una hoja (con `SAFETY_MARGIN_PX = 48` de colchón),
-  se fuerza **siempre** una hoja completa (`PAGE_HEIGHT_PX = 11 * 96`) —
-  nunca el alto "pelado" del contenido, aunque técnicamente quepa: min-height
-  es un piso, no un techo, así que dejarlo justo al límite es dejar cero
-  colchón exactamente donde más se necesita (ver "Bugs ya cazados").
-- Si el contenido ya excede una hoja de sobra, se usa su alto real medido
-  (`offsetHeight`) — ahí no hay colchón que alcance, tiene que repartirse en
-  más de una hoja física igual.
+El `min-height` que se aplica es **siempre un múltiplo exacto del alto de una
+hoja física** (`PAGE_HEIGHT_PX = 11 * 96`): `Math.ceil((naturalHeight -
+SAFETY_MARGIN_PX) / PAGE_HEIGHT_PX) * PAGE_HEIGHT_PX`. Nunca el alto "pelado"
+del contenido. Dos razones, cada una un bug real ya cazado:
+
+- **Redondear hacia arriba, no dejar el alto crudo:** el pie va
+  `position: absolute; bottom: 0` contra este `min-height`, y `bottom: 0`
+  sólo cae al borde inferior de una hoja física si `min-height` es múltiplo
+  redondo de `PAGE_HEIGHT_PX`. Con el alto crudo (que casi nunca lo es), un
+  capítulo de ~1,3 hojas dejaba el pie flotando a media hoja en la segunda,
+  con el resto en blanco (reportado por Camilo).
+- **Restar `SAFETY_MARGIN_PX = 48` antes de dividir, no sumar:** un capítulo
+  que en pantalla mide un pelo más que N hojas —dentro del ruido de medición
+  pantalla/impresión— se queda en N y no salta a N+1 por unos pocos píxeles.
+  Es el mismo criterio que antes valía sólo para la primera hoja ("forzar la
+  hoja completa salvo que el contenido exceda claramente el límite"), ahora
+  generalizado a cualquier N.
 
 El pie de cada capítulo (`PageFooter`, ver más abajo) usa
 `position: absolute; bottom: 0` contra ese `min-height` ya aplicado — **no**
@@ -483,6 +492,40 @@ En `.page.chapter`, `PageFooter` recibe su `ref` **directamente en el
 `<footer>`** (React 19, sin `forwardRef`) — nunca envolverlo en un `<div>`
 intermedio sólo para poder medirlo, ver "Bugs ya cazados" (el bug del ref
 envuelto) para el porqué exacto.
+
+## Hoja de continuación de un capítulo (`Chapter.tsx`, `.chapter-cont`)
+
+Cuando un capítulo se reparte en 2+ hojas, la(s) hoja(s) posteriores a la
+primera llevan mucho blanco (el contenido que bajó + el pie abajo, nada en el
+medio) — feedback de Camilo: "se siente vacía", y peor todavía si baja un solo
+ítem. Dos mitigaciones, **ambas sólo de impresión** (el PDF es el entregable;
+en pantalla el capítulo es un bloque continuo sin corte de hoja):
+
+- **Rótulo de continuación:** `Chapter.tsx` sabe cuántas hojas ocupa el
+  capítulo (`minHeightPx / PAGE_HEIGHT_PX`, ya redondeado a hojas enteras) y
+  renderiza un `<div class="chapter-cont">` por cada hoja extra, con
+  `style={{ top: k * PAGE_HEIGHT_PX }}`. Mismo mecanismo que `PageFooter`:
+  `position: absolute` contra el `min-height` del capítulo, con `left/right: 0`
+  para sangrar al borde físico y `top` en múltiplos exactos de hoja para caer
+  al inicio de cada hoja de continuación, fuera del flujo de fragmentación.
+  Cae en la banda de padding superior (los `0.85in`), así no pisa el contenido
+  que fluye. Contenido: `{número} · {título} · continúa`. Estilo discreto
+  (línea fina + rótulo mono), **no** una segunda franja sólida — dos bandas
+  pesadas por hoja se sentía cargado. `display: none` por defecto,
+  `display: flex` sólo en `@media print`.
+- **Control de huérfanos:** `.chapter-main .paragraph-item:last-of-type
+  { break-before: avoid }` (en `@media print`). Si el último párrafo de
+  observaciones/recomendaciones quedaría solo en la hoja de continuación, el
+  navegador mueve el salto una posición antes y bajan **al menos dos** juntos.
+  Se verificó que Chrome lo respeta para saltos de página con este layout
+  (`break-inside: avoid` en los ítems, `box-decoration-break: clone`). **`:last-of-type`
+  y no `:last-child`**: el último hijo real de `.paragraph-list` es el botón
+  "Agregar" (`no-print`, pero sigue en el DOM), así que `:last-child` no
+  matchearía nunca el párrafo.
+
+Sigue pendiente (ver "Pendientes"): la **primera** hoja de un capítulo
+multipágina no lleva la franja del pie — el pie es un único elemento absoluto
+y sólo cae en la última hoja.
 
 ## Folio (`lib/code.ts`)
 
@@ -591,6 +634,7 @@ lleva el color de alerta completo.
 | `oxlint` marcaba `react(set-state-in-effect)` en dos lugares (`App.tsx` y `store.ts`) por llamar `setChecking(false)`/`setBooting(false)` de forma síncrona dentro de un efecto cuando no había nada que verificar | El patrón "arranca en `true`, el efecto lo apaga si no aplica" fuerza un render extra innecesario. Fix: inicializar el estado de forma perezosa según la condición (`useState(() => !!getStoredAccessKey())`), para que el caso "no hay nada que hacer" no pase por el efecto en absoluto. |
 | Pie de página de un capítulo corto/vacío quedaba pegado justo debajo del contenido, con el resto de la hoja física en blanco por debajo sin usar (reportado por Camilo y Matías con capturas reales, varias veces) | Tres causas distintas, encontradas una a la vez — no una sola: (1) primer intento usaba un spacer invisible + `getBoundingClientRect` + un acumulador de estado (`setFillerPx(prev => prev + deficit)`) que podía sobre-corregirse con contenido asíncrono, dejando capítulos cortos medidos más altos que una hoja entera — confirmado con una traza real registrando cada paso de una edición en vivo. (2) el rediseño a flex-column + `margin-top:auto` fallaba porque el `ref` de `PageFooter` estaba en un `<div>` envolvente, no en el propio `<footer>` — `margin:auto` en el eje del bloque sólo hace algo en un ítem flex **directo**, en cualquier descendiente más profundo simplemente vale 0. (3) el mismo flex-column + `margin-top:auto`, ya con el ref corregido, tenía un bug real y distinto de **Chromium**: al fragmentar la caja en 2+ hojas físicas de impresión, el algoritmo de fragmentación de flexbox con auto-margins es inconsistente — confirmado imprimiendo un solo capítulo aislado (con contenido que de sobra entraba en una hoja, con espacio libre visible) y el pie igual saltaba entero a una segunda hoja casi en blanco. Fix final: nada de flexbox para esto — `Chapter.tsx` mide el contenido con `useLayoutEffect` y aplica un `min-height` en línea (ver "Paginación de impresión"), y el pie vuelve a `position:absolute;bottom:0` — el mismo mecanismo, ya probado, que usan todas las demás páginas. Un elemento posicionado de forma absoluta queda fuera del flujo de fragmentación de CSS Paged Media, así que no puede heredar el bug (3). |
 | El fix anterior (con `min-height` calculado en JS) volvió a fallar en un caso específico: un capítulo cuyo contenido real medía apenas más que el límite de una hoja terminaba con el pie solo en una segunda hoja casi vacía | La primera versión de la lógica usaba el alto "pelado" del contenido (`naturalHeight`) apenas éste no entraba con el margen de seguridad de sobra — exactamente el caso borde que más necesitaba colchón contra la diferencia entre cómo mide React en pantalla y cómo termina renderizando Chrome al imprimir de verdad terminaba con cero colchón. Fix: invertir la condición — forzar SIEMPRE una hoja completa salvo que el contenido exceda claramente el límite (`naturalHeight > PAGE_HEIGHT_PX + SAFETY_MARGIN_PX`), nunca al revés. |
+| Y **volvió a fallar** un nivel más arriba: un capítulo claramente multipágina (4 recomendaciones, ~1,3 hojas) dejaba el pie flotando a ~1/3 de la segunda hoja, con el resto en blanco (reportado por Camilo con PDF real, 2026-08-30). La rama "excede claramente → usar `naturalHeight`" seguía poniendo un `min-height` **no múltiplo** de `PAGE_HEIGHT_PX`, y `position:absolute;bottom:0` cae a media hoja física cuando la caja no termina en un borde de hoja. Los capítulos de 1 hoja no lo mostraban porque ahí `min-height` era exactamente `PAGE_HEIGHT_PX`. Fix: **una sola fórmula, sin ramas** — `min-height = Math.ceil((naturalHeight - SAFETY_MARGIN_PX) / PAGE_HEIGHT_PX) * PAGE_HEIGHT_PX` (siempre múltiplo redondo de la hoja; el colchón se **resta** antes de dividir para no saltar de N a N+1 hojas por ruido de sub-píxel). Verificado con el capítulo real reconstruido en headless: antes `min-height` 1405px / pie a 349px de la 2ª hoja; después `min-height` 2112px / pie al borde. Capítulos de 1 hoja y plantilla por defecto sin cambio (siguen en 1056px). |
 | Al probar el layout de 2 columnas del capítulo (`.chapter-body`), el bloque completo (ficha + narrativa) se pintó naranjo sólido | Las clases `severity-critical`/`severity-needs-action`/etc ya existían **sin scopear a su componente** — las usan `SeverityBadge.tsx` y el punto de `SummaryTable.tsx` para pintar su propio fondo. La franja de color nueva del layout de 2 columnas reusó esos mismos nombres de clase en `.chapter-aside`/`.chapter-body`, y como no están scopeadas, cualquier otro elemento con esa clase hereda el mismo fondo. Fix: prefijo `accent-*` dedicado para la franja del layout, nunca compartir nombre con clases de otro componente que no estén scopeadas. |
 
 ## Verificación
@@ -759,6 +803,12 @@ desde el auto-generado al crear la cuenta).
   excluir subtítulos sueltos dentro de un capítulo).
 - Revisar con Camilo/Matías la redacción final de portada y cierre
   ("Próximos pasos") antes de usarlo en un levantamiento real con cliente.
+- La **primera** hoja de un capítulo que se reparte en 2+ hojas no lleva la
+  franja del pie (`PageFooter` es un único elemento `position: absolute` y sólo
+  cae en la última hoja). Las hojas de continuación sí llevan el rótulo de
+  arriba (`.chapter-cont`, ver "Hoja de continuación"). Si se quiere el pie en
+  todas, hay que repetirlo por hoja física — mismo truco `top: k *
+  PAGE_HEIGHT_PX` que usa `.chapter-cont`, o `@page` margin boxes.
 
 ## Repo
 
