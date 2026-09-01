@@ -112,8 +112,8 @@ src/
                                 capítulos de inspección; "anchors" viene con contenido
                                 de ejemplo ya escrito (es el capítulo de referencia)
     store.ts                    useReportStore: estado activo, autoguardado (debounce
-                                400ms) hacia el Worker, mirror local de resiliencia,
-                                Nueva/Deshacer — ver "Nube como fuente de verdad"
+                                3 s + guard de no-op) hacia el Worker, mirror local de
+                                resiliencia, Nueva/Deshacer — ver "Nube como fuente de verdad"
     api.ts                       lib/api.ts: fetchReport/saveReport/listReports/
                                  deleteReport/verifyAccessKey — el único lugar que le
                                  habla al Worker
@@ -239,6 +239,21 @@ modifica-escribe no atómico) — para un equipo chico el riesgo es bajo y se
 autocorrige en el siguiente guardado; no se construyó una cola/lock para
 esto todavía (ver Pendientes si el equipo crece).
 
+**El documento se escribe SIEMPRE; el `index` sólo cuando hace falta**
+(`INDEX_MAX_STALENESS_MS = 60_000` en `worker/src/index.ts`). En cada `PUT`,
+el Worker reescribe la key `index` únicamente si es un `code` nuevo, cambió
+`client`/`date`, o la entrada del índice tiene más de 60 s. Motivo: el plan
+**free de Workers KV da 1000 escrituras `put`/día compartidas entre las tres
+apps**, y el autoguardado (cada 3 s de edición, ver "Sincronización") gastaba
+2 `put` por guardado —documento + índice completo— así que una sola jornada de
+trabajo agotaba la cuota y KV devolvía 429 hasta el reset (00:00 UTC). Pasó de
+verdad el 2026-09-01 (correo de alerta de Cloudflare, las tres apps quedaron
+sin guardar en la nube hasta el reset). Costo aceptado del cambio: `updatedAt`
+del listado del Historial puede quedar hasta ~1 min atrasado durante una
+edición activa — el documento abierto siempre trae el valor real desde su
+propio envelope. Si el equipo crece y esto vuelve a apretar, lo siguiente es
+el plan pago (US$5/mes → 1M `put`/mes), no reescribir más lógica.
+
 ## Acceso (`AccessGate.tsx`, `lib/api.ts`, `worker/src/index.ts`)
 
 **Clave compartida de equipo, no cuentas por persona** — decisión explícita
@@ -287,17 +302,31 @@ por conocer el origen, necesita la clave.
 con el Worker. Al montar, si había un informe activo (mirror local), se
 vuelve a pedir fresco (la nube manda); si eso falla por red, se sigue
 trabajando con el mirror y `SyncStatus` muestra "Sin conexión". Cada cambio
-dispara, después de 400ms de debounce: escribir el mirror local, `PUT` al
-Worker, y actualizar el estado visible (`idle → saving → saved`, o
-`offline`/`error` si falla). Un `saveSeq` (número de secuencia) descarta la
-respuesta de un guardado viejo si uno más nuevo ya llegó antes — evita que
-una respuesta lenta pise el estado de una más reciente.
+dispara, después de `AUTOSAVE_DEBOUNCE_MS` (3 s) de debounce: escribir el
+mirror local, `PUT` al Worker, y actualizar el estado visible
+(`idle → saving → saved`, o `offline`/`error` si falla). Un `saveSeq` (número
+de secuencia) descarta la respuesta de un guardado viejo si uno más nuevo ya
+llegó antes — evita que una respuesta lenta pise el estado de una más reciente.
+
+**Guard de no-op + debounce de 3 s + flush al ocultar** (2026-09-01, aplicado
+a las tres apps, para no agotar el tope free de KV — ver "Arquitectura de
+datos"): antes de cada `PUT` se compara `JSON.stringify(report)` contra la
+firma del último guardado con éxito (`lastSavedRef`, sembrada en el primer
+render y tras el fetch inicial); si es idéntica, no se llama al Worker —
+mata los guardados de cambios que no tocan contenido (re-render, foco/blur).
+El debounce subió de 400 ms a 3 s: un párrafo escrito de corrido es un
+guardado en vez de varios. Como con 3 s un cierre abrupto podría perder los
+últimos segundos, un listener de `visibilitychange → hidden` fuerza un
+guardado inmediato al cambiar de pestaña/minimizar (con bump de `saveSeq`
+para no pisarse con el debounce). El riesgo residual —crash o corte de luz
+en los ~3 s previos al guardado— lo cubren el mirror local y el aviso de
+`SyncStatus`.
 
 **No guarda hasta la primera edición real** (fix del 2026-08-20, aplicado
 también en los dos hermanos de `venta/` tras notarlo primero en
 `propuesta_tecnica_react`): sin esto, `report` nace de `initialTemplate()` en
-el primer render y el efecto de guardado lo persiste a los 400ms aunque
-nadie haya tocado nada — el solo hecho de abrir la app crea un informe
+el primer render y el efecto de guardado lo persiste al vencer el debounce
+aunque nadie haya tocado nada — el solo hecho de abrir la app crea un informe
 permanente en el Worker. Se compara `report` contra una foto de sí mismo
 tomada en el primer render (`pristineReport`, por referencia, no
 `JSON.stringify`) en vez de un flag booleano de una sola consumición: React

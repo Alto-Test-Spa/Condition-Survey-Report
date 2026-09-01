@@ -51,6 +51,17 @@ function isAuthorized(request: Request, env: Env): boolean {
 
 const INDEX_KEY = "index"
 
+// Cada guardado escribe SIEMPRE el documento, pero el índice de resúmenes —una
+// única key compartida por los tres tipos de documento— sólo se reescribe si
+// cambió algo que el Historial muestra (cliente/fecha), es un documento nuevo,
+// o la entrada quedó más vieja que esto. El autoguardado del front dispara cada
+// pocos segundos mientras se edita; sin esta condición, una jornada de trabajo
+// sobre un documento consumía sola el tope diario de escrituras del plan free
+// de KV (1000/día, compartido entre las tres apps). Costo aceptado: `updatedAt`
+// en el listado puede quedar hasta ~1 min atrasado durante una edición activa
+// — el documento abierto siempre trae el valor real desde su propio envelope.
+const INDEX_MAX_STALENESS_MS = 60_000
+
 async function readIndex(env: Env): Promise<ReportSummary[]> {
   const raw = await env.REPORTS.get(INDEX_KEY)
   if (!raw) return []
@@ -135,9 +146,17 @@ export default {
       await env.REPORTS.put(storageKey(kind, code), JSON.stringify(envelope))
 
       const summaries = await readIndex(env)
-      const next = summaries.filter((s) => !(s.kind === kind && s.code === code))
-      next.push({ code, kind, client: envelope.client, date: envelope.date, updatedAt: envelope.updatedAt })
-      await writeIndex(env, next)
+      const existing = summaries.find((s) => s.kind === kind && s.code === code)
+      const indexNeedsWrite =
+        !existing ||
+        existing.client !== envelope.client ||
+        existing.date !== envelope.date ||
+        envelope.updatedAt - existing.updatedAt >= INDEX_MAX_STALENESS_MS
+      if (indexNeedsWrite) {
+        const next = summaries.filter((s) => !(s.kind === kind && s.code === code))
+        next.push({ code, kind, client: envelope.client, date: envelope.date, updatedAt: envelope.updatedAt })
+        await writeIndex(env, next)
+      }
 
       return json({ ok: true, updatedAt: envelope.updatedAt }, 200, headers)
     }

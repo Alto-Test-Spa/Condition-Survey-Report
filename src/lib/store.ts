@@ -13,6 +13,21 @@ import type { SyncState } from './api'
 const MIRROR_KEY = 'altotest_informe_levantamiento_mirror'
 const PREVIOUS_KEY = `${MIRROR_KEY}_previous`
 
+// Espera de inactividad antes de subir un cambio. Más alto = menos escrituras a
+// KV (el plan free da 1000/día compartidas entre las tres apps); un párrafo
+// escrito de corrido termina siendo un guardado en vez de varios. Costo: un
+// cierre abrupto del navegador puede perder hasta estos ms de edición — el
+// mirror local y el flush en `visibilitychange` lo mitigan.
+const AUTOSAVE_DEBOUNCE_MS = 3000
+
+// Firma del estado para el guard de no-op: si el `report` actual serializa igual
+// que el último subido con éxito, no se llama al Worker. Sin esto, cualquier
+// cambio de `report` que no toque el contenido (re-render, foco/blur) gastaba
+// una escritura KV igual.
+function serialize(report: ReportState): string {
+  return JSON.stringify(report)
+}
+
 function withCodeAndDate(report: ReportState): ReportState {
   return {
     ...report,
@@ -59,6 +74,12 @@ export function useReportStore(onAuthExpired: () => void) {
   // cambios sin sincronizar sigue guardando como siempre.
   const hadMirrorOnBoot = useRef(!!readMirror())
   const pristineReport = useRef(report)
+  // Semilla inmutable calculada una sola vez (useState perezoso) para no
+  // re-serializar el documento entero en cada render. `lastSavedRef` se
+  // actualiza tras cada guardado con éxito (efecto de abajo) y tras el fetch
+  // inicial (efecto de montaje).
+  const [initialSerialized] = useState(() => serialize(report))
+  const lastSavedRef = useRef(initialSerialized)
   // Ref en vez de dependencia del efecto: sólo nos interesa la versión más reciente del
   // callback cuando de verdad se necesita (401), no que el timer de autoguardado se
   // reinicie cada vez que App.tsx vuelve a renderizar y crea la función de nuevo. Se
@@ -79,6 +100,7 @@ export function useReportStore(onAuthExpired: () => void) {
       .then((fresh) => {
         setReport(fresh)
         writeMirror(fresh)
+        lastSavedRef.current = serialize(fresh)
       })
       .catch((e) => {
         if (e instanceof ApiError && e.status === 401) {
@@ -96,11 +118,16 @@ export function useReportStore(onAuthExpired: () => void) {
     if (isUntouched) return
     const seq = ++saveSeq.current
     const t = setTimeout(async () => {
+      const snapshot = serialize(report)
+      if (snapshot === lastSavedRef.current) return // nada nuevo que persistir
       writeMirror(report)
       setSyncState('saving')
       try {
         await saveReport(report)
-        if (saveSeq.current === seq) setSyncState('saved')
+        if (saveSeq.current === seq) {
+          lastSavedRef.current = snapshot
+          setSyncState('saved')
+        }
       } catch (e) {
         if (saveSeq.current !== seq) return
         if (e instanceof ApiError) {
@@ -118,8 +145,29 @@ export function useReportStore(onAuthExpired: () => void) {
         localStorage.removeItem(PREVIOUS_KEY)
         setCanUndo(false)
       }
-    }, 400)
+    }, AUTOSAVE_DEBOUNCE_MS)
     return () => clearTimeout(t)
+  }, [report])
+
+  // Con el debounce más largo, cambiar de pestaña o minimizar podría dejar los
+  // últimos segundos de edición sin subir. Al pasar la página a segundo plano se
+  // fuerza un guardado inmediato si hay algo pendiente; el bump de `saveSeq`
+  // evita que este guardado y el del debounce se pisen al volver.
+  useEffect(() => {
+    const flushIfHidden = () => {
+      if (document.visibilityState !== 'hidden') return
+      const snapshot = serialize(report)
+      if (snapshot === lastSavedRef.current) return
+      const seq = ++saveSeq.current
+      writeMirror(report)
+      saveReport(report)
+        .then(() => {
+          if (saveSeq.current === seq) lastSavedRef.current = snapshot
+        })
+        .catch(() => {})
+    }
+    document.addEventListener('visibilitychange', flushIfHidden)
+    return () => document.removeEventListener('visibilitychange', flushIfHidden)
   }, [report])
 
   function reset() {
