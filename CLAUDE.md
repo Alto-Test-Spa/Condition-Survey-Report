@@ -795,17 +795,14 @@ desde el auto-generado al crear la cuenta).
 
 ## Pendientes
 
-- **Frontend de esta app aún no está en Vercel** — a diferencia de
-  `propuesta_economica_react`/`propuesta_tecnica_react` (ver más abajo), que
-  ya reemplazaron un proyecto Vercel existente. `informe_levantamiento` sólo
-  se ha probado local (`npm run dev`, `localhost:5210`) contra el Worker real
-  o contra `wrangler dev`. El repo GitHub (`Alto-Test-Spa/Condition-Survey-Report`)
-  ya tiene todo pusheado a `main` — falta importar el proyecto en el
-  dashboard de Vercel (Add New Project → detecta Vite solo, es la primera
-  vez, no hay preset viejo que cambiar) y agregar
-  `VITE_REPORTS_ENDPOINT=https://altotest-documentos.altotest.workers.dev`
-  como variable de entorno antes del primer deploy. Confirmar con Matías si
-  ya lo hizo — quedó en "lo hago yo, tranqui" a mitad de esta sesión.
+- **Frontend en Vercel: ya importado** (Matías lo hizo después del
+  2026-08-20; auto-deploy desde `main` de `Alto-Test-Spa/Condition-Survey-Report`,
+  confirmado con un deploy "Ready" el 2026-09-01 tras un push). Falta
+  verificar que el proyecto tenga la variable de entorno
+  `VITE_REPORTS_ENDPOINT=https://altotest-documentos.altotest.workers.dev` —
+  sin ella el build compila igual pero `BASE_URL` queda `undefined`
+  (`src/lib/api.ts`) y no puede hablar con el Worker. Chequeo: abrir la URL
+  en vivo y pasar el portón de acceso con la clave de 4 dígitos.
 - ~~`propuesta_economica`/`propuesta_tecnica` conectadas al Worker~~ — hecho.
   A ninguna de las dos se le agregó el Worker al vanilla-JS existente: se
   **reescribieron completas en Vite+React** (`venta/propuesta_economica_react/`
