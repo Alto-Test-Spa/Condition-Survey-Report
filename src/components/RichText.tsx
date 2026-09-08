@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import Bold from 'reicon-react/icons/Bold'
 import Italic from 'reicon-react/icons/Italic'
@@ -28,7 +28,16 @@ export function RichText({ value, onChange, placeholder, className }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [toolbarPos, setToolbarPos] = useState<ToolbarPos | null>(null)
 
-  useEffect(() => {
+  // useLayoutEffect (no useEffect): tiene que escribir el DOM ANTES del paint, no después.
+  // Chapter.tsx mide el alto real del capítulo con su propio useLayoutEffect — y React
+  // corre los layout effects de los hijos (este) antes que los del padre (Chapter) dentro
+  // del mismo commit. Con useEffect (después del paint), la primera medición de un
+  // capítulo recién cargado (abrir del Historial, o el refetch de arranque) atrapaba el
+  // div todavía VACÍO — el texto real recién se inyectaba un instante después — y
+  // subestimaba el alto hasta que algo más disparara un re-render (bug real: un capítulo
+  // que en verdad necesitaba 2 hojas quedaba reservando sólo 1 hasta el autoguardado ~3s
+  // después, o cualquier otro re-render sin relación).
+  useLayoutEffect(() => {
     const el = ref.current
     if (el && el.innerHTML !== value) el.innerHTML = value
   }, [value])

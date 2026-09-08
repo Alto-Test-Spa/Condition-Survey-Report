@@ -422,6 +422,12 @@
      contra el min-height que ya calculamos en JS — un elemento posicionado de forma
      absoluta queda FUERA del flujo de fragmentación de CSS Paged Media, así que no puede
      heredar ese bug. */
+  /* Un capítulo cuyo contenido cae justo en el borde ambiguo entre pantalla e impresión
+     (Chapter.tsx, AMBIGUOUS_ZONE_PX) pasa a un alto de hoja CUSTOM calculado sólo para ese
+     capítulo (proporcional al desborde real, no un tamaño fijo compartido) en vez de sumar
+     una hoja Carta entera para un sobrante que puede no ser real. La regla @page con ese
+     alto y el `page: <nombre>` que la activa se generan en JS (Chapter.tsx) — no hay nada
+     estático que declarar acá, cada capítulo ambiguo trae su propia regla. */
   /* Pie de página: franja sólida (no una línea ni un degradé) — mismo espíritu que
      .doc-footer de propuesta_economica_react y .foot de propuesta_tecnica_react, pero en
      --color-steel (azul de marca) en vez de --color-ink: la versión en tinta casi negra
@@ -1276,6 +1282,12 @@
   size: Letter;
   margin: 0;
 }
+
+/* El escape hatch de Chapter.tsx (capítulos cuyo alto cae en la zona de ambigüedad
+   pantalla/impresión, ver AMBIGUOUS_ZONE_PX ahí) ya no usa una hoja de tamaño fijo acá —
+   cada capítulo ambiguo declara su PROPIA regla @page (nombrada `chapter-<id>-page`, alto
+   calculado proporcional a su desborde real) en un <style> que renderiza el propio
+   componente. Nada que declarar en este archivo: no hay un tamaño compartido de por medio. */
 
 @media print {
   html,

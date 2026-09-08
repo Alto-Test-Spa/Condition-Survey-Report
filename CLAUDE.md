@@ -474,23 +474,58 @@ que el capítulo cambia (texto, fotos, severidad, filas de la ficha — depende
 del objeto `chapter` completo, no de un campo puntual) y aplica el resultado
 como `style={{ minHeight }}` en línea sobre el propio `<section>`:
 
-El `min-height` que se aplica es **siempre un múltiplo exacto del alto de una
-hoja física** (`PAGE_HEIGHT_PX = 11 * 96`): `Math.ceil((naturalHeight -
-SAFETY_MARGIN_PX) / PAGE_HEIGHT_PX) * PAGE_HEIGHT_PX`. Nunca el alto "pelado"
-del contenido. Dos razones, cada una un bug real ya cazado:
+El `min-height` que se aplica es **siempre un múltiplo exacto del alto de
+CADA hoja que ocupa el capítulo** (`sheetHeightPx * sheetCount`, ver abajo) —
+nunca el alto "pelado" del contenido. Redondear hacia arriba, no dejar el
+alto crudo: el pie va `position: absolute; bottom: 0` contra este
+`min-height`, y `bottom: 0` sólo cae al borde inferior de una hoja física si
+`min-height` es múltiplo redondo del alto de hoja. Con el alto crudo (que casi
+nunca lo es), un capítulo de ~1,3 hojas dejaba el pie flotando a media hoja en
+la segunda, con el resto en blanco (reportado por Camilo).
 
-- **Redondear hacia arriba, no dejar el alto crudo:** el pie va
-  `position: absolute; bottom: 0` contra este `min-height`, y `bottom: 0`
-  sólo cae al borde inferior de una hoja física si `min-height` es múltiplo
-  redondo de `PAGE_HEIGHT_PX`. Con el alto crudo (que casi nunca lo es), un
-  capítulo de ~1,3 hojas dejaba el pie flotando a media hoja en la segunda,
-  con el resto en blanco (reportado por Camilo).
-- **Restar `SAFETY_MARGIN_PX = 48` antes de dividir, no sumar:** un capítulo
-  que en pantalla mide un pelo más que N hojas —dentro del ruido de medición
-  pantalla/impresión— se queda en N y no salta a N+1 por unos pocos píxeles.
-  Es el mismo criterio que antes valía sólo para la primera hoja ("forzar la
-  hoja completa salvo que el contenido exceda claramente el límite"), ahora
-  generalizado a cualquier N.
+Cuántas hojas y de qué alto es una decisión en dos pasos (`Chapter.tsx`,
+constantes `PAGE_HEIGHT_PX`, `AMBIGUOUS_ZONE_PX`, `CUSTOM_PAGE_BUFFER_PX`):
+
+1. `strictSheetCount = Math.ceil(naturalHeight / PAGE_HEIGHT_PX)` — sin
+   perdonar nada. Antes esto se resolvía restando un colchón fijo
+   (`SAFETY_MARGIN_PX`) antes de dividir, pero esta sesión demostró con dos
+   casos reales que **ningún valor de colchón sirve para los dos a la vez**
+   (ver "Bugs ya cazados"): un capítulo de 19 recomendaciones necesitaba un
+   colchón < 17px para no perdonar un desborde real, y un capítulo con una
+   recomendación de texto repetitivo bajo justificado necesitaba un colchón
+   > 18px para no reservar una hoja completa que en el PDF real sale en
+   blanco. Es la MISMA incertidumbre de medición pantalla/impresión, sólo que
+   un caso necesita perdonarla y el otro no — en pantalla no hay forma de
+   distinguirlos con un solo número.
+2. Si `strictSheetCount === 2` (el capítulo mide un poco más de 1 hoja) y el
+   sobrante sobre esa 2ª hoja cae dentro de `AMBIGUOUS_ZONE_PX` (120px), el
+   capítulo pasa a **1 sola hoja de alto CUSTOM** —no Carta, un poco más
+   alta, calculada como `naturalHeight + CUSTOM_PAGE_BUFFER_PX` (90px de
+   colchón, siempre SUMADO, nunca restado, así en el peor caso la hoja queda
+   un poco más alta de lo necesario, nunca más baja)— en vez de reservar una
+   2ª hoja Carta completa que puede salir casi en blanco. Se activó primero
+   la idea de saltar a hoja Oficio chilena (8.5x13in) para cualquier
+   capítulo ambiguo, sin importar cuántas hojas fueran — Matías pidió algo
+   proporcional al desborde real en vez de "una hoja TAN grande cuando no
+   sea necesario", y **probando el caso de 19 recomendaciones se encontró
+   que reducir el número de hojas (no sólo agrandarlas) para
+   `strictSheetCount >= 3` reproduce el MISMO bug del pie flotando, un nivel
+   más arriba** (ver "Bugs ya cazados") — por eso el tamaño custom sólo se
+   activa en el límite 1↔2 hojas, que es además el único caso real
+   reportado (el informe en producción `IL-20260904-105543`) y el único
+   contra el que `CUSTOM_PAGE_BUFFER_PX` está calibrado. Para
+   `strictSheetCount >= 3` se usan hojas Carta normales, tantas como
+   `strictSheetCount` indique, sin intentar ahorrar ninguna.
+3. La hoja custom necesita su propia regla `@page` (nombrada
+   `chapter-<id>-page`, alto en pulgadas) porque el tamaño físico de una hoja
+   de impresión sólo se puede declarar con un at-rule `@page`, no con una
+   propiedad CSS normal — `Chapter.tsx` la renderiza como un `<style>` hijo
+   del propio `<section>` (confirmado con una prueba aislada: a Chromium no
+   le importa dónde vive el `<style>` en el DOM, sólo que exista antes de
+   imprimir) y activa esa hoja en el `<section>` vía `style={{ page:
+   'chapter-<id>-page' }}` (la propiedad CSS `page` de Paged Media, no una
+   clase — confirmado que Chromium sí respeta un `page` distinto por
+   elemento, mezclando tamaños de hoja dentro del mismo PDF).
 
 El pie de cada capítulo (`PageFooter`, ver más abajo) usa
 `position: absolute; bottom: 0` contra ese `min-height` ya aplicado — **no**
@@ -531,9 +566,11 @@ medio) — feedback de Camilo: "se siente vacía", y peor todavía si baja un so
 en pantalla el capítulo es un bloque continuo sin corte de hoja):
 
 - **Rótulo de continuación:** `Chapter.tsx` sabe cuántas hojas ocupa el
-  capítulo (`minHeightPx / PAGE_HEIGHT_PX`, ya redondeado a hojas enteras) y
-  renderiza un `<div class="chapter-cont">` por cada hoja extra, con
-  `style={{ top: k * PAGE_HEIGHT_PX }}`. Mismo mecanismo que `PageFooter`:
+  capítulo (`sheetCount`, ya redondeado a hojas enteras — ver "Paginación de
+  impresión") y renderiza un `<div class="chapter-cont">` por cada hoja
+  extra, con `style={{ top: k * sheetHeightPx }}` (el alto de CADA hoja de
+  este capítulo — Carta normal, o el alto custom si cayó en la zona
+  ambigua). Mismo mecanismo que `PageFooter`:
   `position: absolute` contra el `min-height` del capítulo, con `left/right: 0`
   para sangrar al borde físico y `top` en múltiplos exactos de hoja para caer
   al inicio de cada hoja de continuación, fuera del flujo de fragmentación.
@@ -665,6 +702,12 @@ lleva el color de alerta completo.
 | El fix anterior (con `min-height` calculado en JS) volvió a fallar en un caso específico: un capítulo cuyo contenido real medía apenas más que el límite de una hoja terminaba con el pie solo en una segunda hoja casi vacía | La primera versión de la lógica usaba el alto "pelado" del contenido (`naturalHeight`) apenas éste no entraba con el margen de seguridad de sobra — exactamente el caso borde que más necesitaba colchón contra la diferencia entre cómo mide React en pantalla y cómo termina renderizando Chrome al imprimir de verdad terminaba con cero colchón. Fix: invertir la condición — forzar SIEMPRE una hoja completa salvo que el contenido exceda claramente el límite (`naturalHeight > PAGE_HEIGHT_PX + SAFETY_MARGIN_PX`), nunca al revés. |
 | Y **volvió a fallar** un nivel más arriba: un capítulo claramente multipágina (4 recomendaciones, ~1,3 hojas) dejaba el pie flotando a ~1/3 de la segunda hoja, con el resto en blanco (reportado por Camilo con PDF real, 2026-08-30). La rama "excede claramente → usar `naturalHeight`" seguía poniendo un `min-height` **no múltiplo** de `PAGE_HEIGHT_PX`, y `position:absolute;bottom:0` cae a media hoja física cuando la caja no termina en un borde de hoja. Los capítulos de 1 hoja no lo mostraban porque ahí `min-height` era exactamente `PAGE_HEIGHT_PX`. Fix: **una sola fórmula, sin ramas** — `min-height = Math.ceil((naturalHeight - SAFETY_MARGIN_PX) / PAGE_HEIGHT_PX) * PAGE_HEIGHT_PX` (siempre múltiplo redondo de la hoja; el colchón se **resta** antes de dividir para no saltar de N a N+1 hojas por ruido de sub-píxel). Verificado con el capítulo real reconstruido en headless: antes `min-height` 1405px / pie a 349px de la 2ª hoja; después `min-height` 2112px / pie al borde. Capítulos de 1 hoja y plantilla por defecto sin cambio (siguen en 1056px). |
 | Al probar el layout de 2 columnas del capítulo (`.chapter-body`), el bloque completo (ficha + narrativa) se pintó naranjo sólido | Las clases `severity-critical`/`severity-needs-action`/etc ya existían **sin scopear a su componente** — las usan `SeverityBadge.tsx` y el punto de `SummaryTable.tsx` para pintar su propio fondo. La franja de color nueva del layout de 2 columnas reusó esos mismos nombres de clase en `.chapter-aside`/`.chapter-body`, y como no están scopeadas, cualquier otro elemento con esa clase hereda el mismo fondo. Fix: prefijo `accent-*` dedicado para la franja del layout, nunca compartir nombre con clases de otro componente que no estén scopeadas. |
+| Un capítulo de 3 observaciones/3 recomendaciones (sin desborde real — "Accesibilidad" y "Anclajes" del informe `IL-20260904-105543`, ya en prod) generaba en el PDF una hoja "CONTINÚA" completamente en blanco después de su hoja real, y de paso descuadraba el conteo del pie (reportado por Camilo con PDF real, 2026-09-08). Reproducido y confirmado con Playwright headless contra los datos reales del informe (fetched del Worker de prod): 9 páginas en el PDF antes del fix, 7 después. | El `useLayoutEffect` de `Chapter.tsx` mide `contentEl.offsetHeight` tal cual se ve EN PANTALLA — donde los controles `.no-print` ("Agregar observación/recomendación/fila", "Agregar fotos", botones de quitar) siguen ocupando su espacio en el flujo, porque `.no-print{display:none}` sólo aplica dentro de `@media print` (ver invariante 7). Esa altura, ~90-115px más alta que la que el capítulo va a ocupar de verdad al imprimir (confirmado comparando la misma medición con `page.emulateMedia({media:'print'})` en Playwright: 933px en pantalla vs. 842px en impresión para "Accesibilidad"), es la que decide si el capítulo "necesita" una segunda hoja — un capítulo que en el PDF cabe justo en una sola hoja quedaba, por ese sobrante de controles de edición invisibles al imprimir, del otro lado del límite de página. Fix: dentro del mismo `useLayoutEffect`, ocultar (`display:none` inline) todos los `.no-print` descendientes de `contentEl` ANTES de medir `offsetHeight`, y restaurarlos inmediatamente después — mide exactamente lo que el PDF va a mostrar, sin parpadeo (todo síncrono, antes del paint). Verificado que un capítulo genuinamente largo (13 recomendaciones, forzado a propósito) sigue repartiéndose en 2 hojas con el pie y el rótulo "continúa" en el lugar correcto — el fix no toca el caso multipágina real, sólo corrige la sobre-medición en pantalla. |
+| Encontrado probando casos borde a propósito (2026-09-08, mismo día del fix anterior): un capítulo que en verdad necesitaba 2 hojas (6 recomendaciones reales) a veces quedaba reservando sólo 1 — con el pie de la hoja 1 mal puesto y sin rótulo "continúa" — si el PDF se generaba INMEDIATAMENTE después de abrir el informe desde el Historial (o al arranque, cuando `store.ts` vuelve a pedir el informe activo al Worker). Esperar un par de segundos, o tocar cualquier campo antes de imprimir, lo "arreglaba" solo — lo que lo hacía fácil de no notar en pruebas manuales normales. | `RichText.tsx` y `EditableText.tsx` sincronizan el DOM (`el.innerHTML`/`el.textContent = value`) dentro de un `useEffect` normal — que React corre DESPUÉS del paint. El `useLayoutEffect` de `Chapter.tsx` que mide el capítulo corre ANTES del paint, en el mismo commit. En la primera renderización de un capítulo con contenido nuevo (abrir del Historial, o el refetch de arranque), la medición de Chapter ocurría mientras cada campo de observaciones/recomendaciones **todavía era un `contentEditable` vacío** — el texto real recién se inyectaba un instante después, en el efecto post-paint — así que el alto medido siempre partía subestimado. Sólo se corregía si algo más disparaba un re-render más tarde (el autoguardado espurio de la fila anterior de esta tabla ocurre ~3s después y termina tapando el síntoma la mayoría de las veces, por eso no se había notado antes). Confirmado con instrumentación: `contentOffsetHeight` pasaba de 774px (primera medición, campos vacíos) a 1131px (tras cualquier re-render posterior, campos ya poblados) para el mismo capítulo sin ningún cambio real de contenido. Fix: `RichText`/`EditableText` sincronizan su `value` con `useLayoutEffect` en vez de `useEffect` — React corre los layout effects de los HIJOS antes que los del PADRE dentro del mismo commit, así que ahora el texto ya está en el DOM cuando `Chapter.tsx` mide. Verificado con Playwright: la medición ahora es correcta e idéntica desde t+50ms (la primera oportunidad real de medir) hasta t+8000ms, sin ninguna espera ni re-render adicional necesario, en tres escenarios (1 hoja, 2 hojas, varias hojas), cada uno repetido 3 veces. |
+| Tercer bug de la misma sesión de pruebas de borde (2026-09-08): un capítulo con 19 recomendaciones (bastante más largo que el caso anterior) mostraba el pie flotando a media hoja física, con blanco debajo — reportado por el usuario con el PDF real generado desde el navegador (`IL-20260908-999011.pdf`), no sólo en pantalla. | `SAFETY_MARGIN_PX` (48px en ese momento) se resta del alto medido ANTES de decidir cuántas hojas hacen falta — pensado para perdonar ruido de sub-píxel entre pantalla e impresión (ver la fila de la tabla sobre el pie flotante, más arriba). Pero acá el capítulo excedía el límite de 2 hojas por sólo 17px de **contenido real** (`naturalHeight` 2129.2px vs. límite de 2112px) — no ruido, una recomendación de más que genuinamente no entraba — y el margen de 48px lo perdonó igual, dejando `min-height` en 2112 (2 hojas) mientras el contenido real, al no caber, empujaba la sección a 2224px de todos modos (min-height es un piso, no un techo — ver la sección "Paginación de impresión"). Como 2224 no es un múltiplo redondo de `PAGE_HEIGHT_PX`, el pie (`bottom:0` contra esa altura) quedaba a mitad de la 3ª hoja física en vez de en su borde. Fix: bajar `SAFETY_MARGIN_PX` de 48 a 8, apostando a que los dos fixes anteriores de esta misma sesión (medir con `.no-print` oculto, y que `RichText`/`EditableText` escriban el DOM con `useLayoutEffect`) habían reducido lo suficiente el ruido pantalla/impresión. Verificado con Playwright + PDF real: el capítulo de 19 recomendaciones pasó a `min-height: 3168px` (3 hojas) con `sectionActualHeight` **exactamente igual** a ese valor, pie al borde de la 3ª hoja. **Esta apuesta resultó equivocada — ver la fila siguiente**, encontrada en el mismo día probando un caso distinto: el ruido pantalla/impresión real puede superar los 8px con facilidad, así que bajar el margen sólo corrió el problema de dirección (de "pie flotando" a "hoja en blanco de más") en vez de eliminarlo. |
+| Con `SAFETY_MARGIN_PX` ya en 8, el mismo capítulo (ahora con una 4ª recomendación repitiendo una palabra corta muchas veces, "BLA BLA BLA...", agregada por el usuario probando el caso opuesto) mostró el bug ORIGINAL de vuelta: una hoja completamente en blanco después de una hoja con harto papel libre — reportado con un video real del navegador (no sólo un PDF), y reproducido también con Playwright fresco (sin caché ni HMR de por medio, para descartar código viejo). | Medición exacta: `naturalHeight` (pantalla, con `.no-print` oculto) = 1074.2px, apenas 18.2px sobre el límite de 1056px de una hoja — de sobra menos que el margen de 8px puede perdonar. Pero forzando el `min-height` de la sección a exactamente `1056px` a mano (bypaseando el cálculo de React) y regenerando el PDF, el contenido real —las 4 recomendaciones completas, incluida la de "BLA"— entra perfecto en una sola hoja, con el pie en su lugar. Es decir: la pantalla mide el párrafo de "BLA BLA BLA..." (texto repetitivo bajo `text-align:justify`) más alto de lo que Chrome termina renderizándolo al imprimir de verdad — el mismo tipo de ruido pantalla/impresión que motivó `SAFETY_MARGIN_PX` desde el principio (ver la primera fila de "pie flotando" de esta tabla), sólo que acá el ruido real ronda los 18-70px, más que el margen de 8px reducido en la fila anterior. **Este caso y el de las 19 recomendaciones piden límites de margen que se contradicen matemáticamente** (uno necesita margen < 17px para no perdonar de más, el otro necesita margen > 18px para perdonar lo suficiente) — no existe un valor único de `SAFETY_MARGIN_PX` que resuelva ambos, y no hay forma de que JS, midiendo sólo en pantalla, prediga con certeza cómo va a envolver el texto el rasterizador de impresión de Chrome para un párrafo puntual. Se dejó `SAFETY_MARGIN_PX = 8` a propósito (no se revirtió a 48): entre los dos modos de falla — una hoja de más casi en blanco (con el pie bien puesto) vs. el pie flotando a mitad de una hoja con contenido después — el primero es notoriamente menos grave para un informe real (una hoja de sobra se nota pero no se ve "roto"; un pie flotando sí). Además, el patrón que lo dispara (una palabra corta repetida muchísimas veces bajo texto justificado) es un caso de prueba artificial — en todo el resto de las pruebas de esta sesión, con oraciones reales de largo variable, la medición en pantalla y la impresión real coincidieron sin necesitar casi margen. Si esto aparece con contenido real de un levantamiento (no texto de prueba), la mitigación es la misma que en cualquier procesador de texto con paginación automática: agregar o sacar unas pocas palabras a la recomendación que quedó justo en el borde para correrla del límite. **`SAFETY_MARGIN_PX` ya no existe — ver las dos filas siguientes para el mecanismo que lo reemplazó.** |
+| Después de la fila anterior, Matías pidió una solución real (no aceptar la hoja en blanco como límite conocido): "cuando el sistema detecte este caso, ¿imprima en hoja oficio?" — se armó un primer diseño donde CUALQUIER capítulo ambiguo pasaba completo a hojas Oficio chilenas (8.5x13in) en vez de sumar una hoja Carta de más. Matías lo frenó antes de terminarlo: "no sé si oficio... printar el tamaño dependiendo de la medida que vaya creciendo el informe, para no poner una hoja TAN grande cuando no sea necesario". | No era un bug todavía (se frenó en diseño), pero vale dejarlo: un salto a tamaño FIJO (Oficio) para cualquier capítulo ambiguo, sin importar cuánto se pasara del límite, resuelve el problema pero de forma desproporcionada — un capítulo que se pasa por 18px no necesita 2 pulgadas extra de hoja. Se reemplazó por un alto de hoja CUSTOM calculado por capítulo (`naturalHeight + CUSTOM_PAGE_BUFFER_PX`, repartido entre las hojas que ya eran necesarias sin discusión) en vez de un tamaño compartido — ver "Paginación de impresión". Factibilidad confirmada antes de escribir el componente: una prueba aislada (`@page <nombre> {size:...}` + `page:<nombre>` por elemento, dos secciones del mismo documento con alturas de hoja distintas) mostró que Chromium sí mezcla tamaños de hoja físicos distintos dentro de un mismo PDF sin problema. |
+| Probando el capítulo de 19 recomendaciones (`IL-20260908-999011`) contra el nuevo mecanismo de hoja custom (fila anterior): el pie volvió a flotar, esta vez a mitad de una 3ª hoja física con blanco debajo — el MISMO bug de las primeras filas de esta tabla, un nivel más arriba. Encontrado en las pruebas de verificación de esta sesión antes de que llegara a producción, no reportado por el usuario. | El diseño original reducía el número de hojas en CUALQUIER capítulo ambiguo (`strictSheetCount - 1`, con `strictSheetCount` cualquiera ≥ 2), calculando el alto custom sólo a partir de `naturalHeight` (pantalla) + un colchón fijo de 90px. Para este capítulo, `strictSheetCount` era 3 (medido en pantalla) y el mecanismo reservó sólo 2 hojas custom de ~11.56in — pero el contenido real, al imprimir, necesitó más que eso: desbordó a una 3ª hoja física de todas formas (misma incertidumbre pantalla/impresión de siempre, aquí más grande que el colchón de 90px porque el capítulo tiene mucho más texto acumulado). Como el contenedor sólo reservaba 2 hojas de alto, `bottom:0` cayó donde terminaban esas 2, a mitad de la 3ª hoja no anticipada. El colchón de 90px sólo estaba validado contra el ÚNICO caso real conocido (`IL-20260904-105543`, un capítulo que pasa de 1 a 2 hojas) — extenderlo a capítulos con mucho más contenido asumía, sin datos, que el desvío pantalla/impresión no crece con el volumen de texto, y ese supuesto quedó refutado. Fix: el tamaño custom sólo se activa cuando `strictSheetCount === 2` (el límite 1↔2 hojas, el único caso real y el único calibrado); para `strictSheetCount >= 3` se usan hojas Carta normales sin intentar ahorrar ninguna — una última hoja parcialmente en blanco en un capítulo ya largo es un problema mucho más chico que un pie flotando con contenido real perdido de vista. Verificado con Playwright + PDF real + análisis de píxeles: el capítulo de 19 recomendaciones volvió a 3 hojas Carta normales (antes: 2 hojas custom de 11.56in con el pie flotando a media 3ª hoja), pie al borde exacto de la 3ª; el caso real de producción (`IL-20260904-105543`, `strictSheetCount === 2`) se mantuvo en 1 sola hoja custom de 12.14in con el pie al borde. |
 
 ## Verificación
 
@@ -795,6 +838,25 @@ desde el auto-generado al crear la cuenta).
 
 ## Pendientes
 
+- **Límite conocido del cálculo de hojas de un capítulo (`Chapter.tsx`,
+  `AMBIGUOUS_ZONE_PX`/`CUSTOM_PAGE_BUFFER_PX`):** la incertidumbre de fondo
+  (la pantalla no predice con exactitud cómo va a envolver el texto el
+  rasterizador de impresión) no se eliminó, sólo se acotó — ver "Paginación
+  de impresión" y las últimas filas de "Bugs ya cazados" para la historia
+  completa (colchón fijo → hoja Oficio para cualquier ambigüedad → hoja
+  custom sólo en el límite 1↔2 hojas). El mecanismo de hoja custom sólo
+  está calibrado (`CUSTOM_PAGE_BUFFER_PX = 90`) contra capítulos que pasan
+  de 1 a 2 hojas — el único caso real conocido. Un capítulo que ya necesita
+  3+ hojas Carta y cae justo en un borde ambiguo puede, en un caso raro,
+  terminar con una última hoja parcialmente en blanco (el modo de falla que
+  se aceptó a propósito por ser menos grave que el pie flotando — ver la
+  fila de "Bugs ya cazados" sobre el capítulo de 19 recomendaciones). Si un
+  informe real muestra esto, la mitigación es la misma de siempre: editar la
+  recomendación/observación que quedó justo en el borde (agregar o sacar
+  unas pocas palabras) para sacarla de la zona ambigua — no hace falta
+  tocar código. Si se junta evidencia real de que el colchón de 90px
+  tampoco alcanza para el caso 1↔2 hojas, subirlo con un dato real de por
+  medio, no a ciegas.
 - **Frontend en Vercel: ya importado** (Matías lo hizo después del
   2026-08-20; auto-deploy desde `main` de `Alto-Test-Spa/Condition-Survey-Report`,
   confirmado con un deploy "Ready" el 2026-09-01 tras un push). Falta
